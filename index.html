@@ -77,6 +77,37 @@
         box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.5); /* Ring effect */
         transform: scale(1.02);
     }
+
+    /* New CSS for movement controls */
+    .movement-grid-button {
+        border: 1px solid #ccc;
+        background-color: #e2e8f0; /* Tailwind gray-200 */
+        color: #4a5568; /* Tailwind gray-700 */
+        cursor: pointer;
+    }
+
+    .movement-grid-button:hover:enabled {
+        background-color: #93c5fd; /* Tailwind blue-300 */
+    }
+
+    .movement-grid-button.selected-move {
+        background-color: #3b82f6; /* Tailwind blue-500 */
+        color: white;
+        border-color: #1d4ed8; /* Tailwind blue-700 */
+    }
+
+    .movement-grid-button:disabled {
+        background-color: #cbd5e0; /* Tailwind gray-300 */
+        color: #a0aec0; /* Tailwind gray-400 */
+        cursor: not-allowed;
+    }
+
+    #movementControl.pointer-events-none {
+        pointer-events: none;
+    }
+    #movementControl.opacity-50 {
+        opacity: 0.5;
+    }
   </style>
 </head>
 <body class="bg-gradient-to-br from-blue-100 to-purple-100 min-h-screen flex flex-col items-center py-8">
@@ -122,14 +153,21 @@
 
     <canvas id="track" width="900" height="600" class="max-w-full h-auto"></canvas>
 
-    <div id="velocity" class="text-xl font-semibold text-gray-700 mt-4">Current Player's Velocity: (0, 0)</div>
+    <!-- New Movement Controls -->
+    <div class="mt-4">
+        <h4 class="text-lg font-semibold text-gray-700 mb-2">Current Player's Velocity: <span id="velocity">(0, 0)</span></h4>
+        <h4 class="text-lg font-semibold text-gray-700 mb-2">Choose Your Move:</h4>
+        <div id="movementControl" class="grid grid-cols-3 gap-1 w-48 h-48 bg-gray-200 p-2 rounded-lg mx-auto">
+            <!-- Directional buttons will be dynamically generated here -->
+        </div>
+        <div class="flex justify-center gap-4 mt-4">
+            <button id="clearSelectionButton" class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded" onclick="clearSelectedMove()">Clear Selection</button>
+            <button id="confirmMoveButton" class="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded" onclick="confirmMove()">Confirm Move</button>
+        </div>
+    </div>
 
     <div id="controls" class="flex flex-wrap justify-center gap-3 mt-8">
-      <button id="vxMinus" onclick="changeVX(-1)" class="px-6 py-3 bg-indigo-600 text-white font-bold rounded-lg shadow-md hover:bg-indigo-700 transition duration-200 ease-in-out transform hover:scale-105">◀️ VX -1</button>
-      <button id="vxPlus" onclick="changeVX(1)" class="px-6 py-3 bg-indigo-600 text-white font-bold rounded-lg shadow-md hover:bg-indigo-700 transition duration-200 ease-in-out transform hover:scale-105">▶️ VX +1</button>
-      <button id="vyMinus" onclick="changeVY(-1)" class="px-6 py-3 bg-indigo-600 text-white font-bold rounded-lg shadow-md hover:bg-indigo-700 transition duration-200 ease-in-out transform hover:scale-105">🔽 VY -1</button>
-      <button id="vyPlus" onclick="changeVY(1)" class="px-6 py-3 bg-indigo-600 text-white font-bold rounded-lg shadow-md hover:bg-indigo-700 transition duration-200 ease-in-out transform hover:scale-105">🔼 VY +1</button>
-      <button id="moveButton" onclick="movePlayer()" class="px-8 py-3 bg-green-500 text-white font-bold rounded-lg shadow-lg hover:bg-green-600 transition duration-200 ease-in-out transform hover:scale-105 ml-4">🚀 Move</button>
+      <!-- Velocity buttons are removed here, replaced by movementControl -->
       <button id="resetButton" onclick="resetGame()" class="px-8 py-3 bg-red-500 text-white font-bold rounded-lg shadow-lg hover:bg-red-600 transition duration-200 ease-in-out transform hover:scale-105">🔄 Reset Game</button>
     </div>
   </div>
@@ -157,26 +195,50 @@
       "#F59E0B"  // Player 4: Amber
     ];
 
+    // SVG icon paths for directions
+    const svgIcons = {
+        'up-left': '<path d="M12 19L5 12L12 5M5 12H19" transform="rotate(135 12 12)"/>',
+        'up': '<path d="M12 19L5 12L12 5M5 12H19" transform="rotate(270 12 12)"/>',
+        'up-right': '<path d="M12 19L5 12L12 5M5 12H19" transform="rotate(45 12 12)"/>',
+        'left': '<path d="M12 19L5 12L12 5M5 12H19" transform="rotate(180 12 12)"/>',
+        'hold': '<circle cx="12" cy="12" r="4"/>',
+        'right': '<path d="M12 19L5 12L12 5M5 12H19" transform="rotate(0 12 12)"/>',
+        'down-left': '<path d="M12 19L5 12L12 5M5 12H19" transform="rotate(-135 12 12)"/>',
+        'down': '<path d="M12 19L5 12L12 5M5 12H19" transform="rotate(90 12 12)"/>',
+        'down-right': '<path d="M12 19L5 12L12 5M5 12H19" transform="rotate(-45 12 12)"/>',
+    };
+
+    /**
+     * Helper function to get the correct SVG icon string based on dx and dy for *visual movement*.
+     */
+    function getDirectionIcon(dx, dy) {
+        if (dx === 0 && dy === 0) return svgIcons['hold'];
+        if (dx === 0 && dy === -1) return svgIcons['down'];
+        if (dx === 0 && dy === 1) return svgIcons['up'];
+        if (dx === -1 && dy === 0) return svgIcons['right'];
+        if (dx === 1 && dy === 0) return svgIcons['left'];
+        if (dx === -1 && dy === -1) return svgIcons['up-right'];
+        if (dx === 1 && dy === -1) return svgIcons['up-left'];
+        if (dx === -1 && dy === 1) return svgIcons['down-right'];
+        if (dx === 1 && dy === 1) return svgIcons['down-left'];
+        return '';
+    }
+
     // --- Helper Functions for Track Drawing ---
 
     /**
-     * Fills the entire inner playable area with blocks (walls).
-     * This is the inverse logic for creating paths by unblocking.
+     * Fills a rectangular area with blocks (walls).
      */
-    function fillInnerTrackWalls() {
-        for (let x = 2; x < cols - 2; x++) {
-            for (let y = 2; y < rows - 2; y++) {
-                blockedCells.add(cellKey(x, y));
-            }
+    function addBlock(startX, startY, width, height) {
+      for (let x = startX; x < startX + width; x++) {
+        for (let y = startY; y < startY + height; y++) {
+          blockedCells.add(cellKey(x, y));
         }
+      }
     }
 
     /**
      * Unblocks a rectangular area, creating a path.
-     * @param {number} startX - Starting X-coordinate (grid units).
-     * @param {number} startY - Starting Y-coordinate (grid units).
-     * @param {number} width - Width of the rectangle (grid units).
-     * @param {number} height - Height of the rectangle (grid units).
      */
     function unblockRectangle(startX, startY, width, height) {
         for (let x = startX; x < startX + width; x++) {
@@ -187,12 +249,7 @@
     }
 
     /**
-     * Unblocks a diagonal line segment with a given thickness, ensuring a solid path.
-     * @param {number} x0 - Start X-coordinate.
-     * @param {number} y0 - Start Y-coordinate.
-     * @param {number} x1 - End X-coordinate.
-     * @param {number} y1 - End Y-coordinate.
-     * @param {number} thickness - How many grid units thick the line should be.
+     * Unblocks a diagonal line segment with a given thickness.
      */
     function unblockDiagonal(x0, y0, x1, y1, thickness = 1) {
         const dx = Math.abs(x1 - x0);
@@ -205,7 +262,7 @@
         let currentY = y0;
 
         while (true) {
-            // Unblock a small rectangle at current position, covering thickness
+            // Unblock a small rectangle at current position
             for (let i = 0; i < thickness; i++) {
                 for (let j = 0; j < thickness; j++) {
                     blockedCells.delete(cellKey(currentX + i, currentY + j));
@@ -221,20 +278,18 @@
     }
 
     /**
-     * Helper function to define the core playable area bounds.
+     * Helper function to define the core playable area bounds for letter tracks.
      */
     function getPlayableAreaBounds() {
         const playableMinX = 2;
-        const playableMaxX = cols - 3; // Right before the right boundary
+        const playableMaxX = cols - 3;
         const playableMinY = 2;
-        const playableMaxY = rows - 3; // Right before the bottom boundary
+        const playableMaxY = rows - 3;
         return { playableMinX, playableMaxX, playableMinY, playableMaxY };
     }
 
     /**
      * Draws Start/Finish lines and text for alphabet tracks.
-     * @param {object} startLine - {x0, y0, x1, y1, type}
-     * @param {object} finishLine - {x0, y0, x1, y1, type}
      */
     function drawTrackLinesAndTexts(startLine, finishLine) {
         // Draw Start Line
@@ -247,16 +302,12 @@
 
         ctx.font = "14px Inter";
         ctx.fillStyle = "#10B981";
-        // Position "START" text relative to the start line
         if (startLine.type === 'horizontal') {
-            // Adjust text position slightly below the line if it's a top start line
-            // or slightly above if it's a bottom start line.
             const textYOffset = (startLine.y0 < (rows / 2)) ? 15 : -5;
             ctx.fillText("START", (startLine.x0 + (startLine.x1 - startLine.x0) / 2) * gridSize - 20, startLine.y0 * gridSize + textYOffset);
-        } else { // vertical
+        } else {
             ctx.fillText("START", (startLine.x0 + 0.5) * gridSize, (startLine.y0 + 1) * gridSize);
         }
-
 
         // Draw Finish Line
         ctx.strokeStyle = "#EF4444"; // Red
@@ -268,22 +319,15 @@
 
         ctx.font = "14px Inter";
         ctx.fillStyle = "#EF4444";
-        // Position "FINISH" text relative to the finish line
         if (finishLine.type === 'horizontal') {
-             // Adjust text position slightly below the line if it's a top finish line
-            // or slightly above if it's a bottom finish line.
             const textYOffset = (finishLine.y0 < (rows / 2)) ? 15 : -5;
             ctx.fillText("FINISH", (finishLine.x0 + (finishLine.x1 - finishLine.x0) / 2) * gridSize - 20, finishLine.y0 * gridSize + textYOffset);
-        } else { // vertical
+        } else {
             ctx.fillText("FINISH", (finishLine.x1 + 0.5) * gridSize - 50, (finishLine.y1 + 1) * gridSize);
         }
     }
 
-
     // --- Track Definitions ---
-    // Each track object contains a name and a function to draw its unique layout.
-    // The draw function will clear existing blockedCells and add new blocks/unblocks.
-    // It should also return the startLine and finishLine properties for player placement.
     const trackDefinitions = [
         {
             id: 'simple-sprint',
@@ -294,8 +338,8 @@
                 const { playableMinX, playableMaxX, playableMinY, playableMaxY } = getPlayableAreaBounds();
 
                 // Outer boundaries
-                addBlock(0, 0, cols, 2); addBlock(0, rows - 2, cols, 2); // Top/Bottom
-                addBlock(0, 0, 2, rows); addBlock(cols - 2, 0, 2, rows); // Left/Right
+                addBlock(0, 0, cols, 2); addBlock(0, rows - 2, cols, 2);
+                addBlock(0, 0, 2, rows); addBlock(cols - 2, 0, 2, rows);
 
                 // Fill entire inner playable area with walls first
                 for (let x = playableMinX; x <= playableMaxX; x++) {
@@ -304,14 +348,14 @@
                     }
                 }
 
-                // Unblock a wide, straight path that connects start and finish
+                // Unblock a wide, straight path
                 unblockRectangle(playableMinX, playableMinY, playableMaxX - playableMinX + 1, playableMaxY - playableMinY + 1);
 
-                // Define Start and Finish Line coordinates for this track
+                // Define Start and Finish Line coordinates
                 const startLine = { x0: playableMinX, y0: playableMinY, x1: playableMinX, y1: playableMaxY, type: 'vertical' };
                 const finishLine = { x0: playableMaxX, y0: playableMinY, x1: playableMaxX, y1: playableMaxY, type: 'vertical' };
                 drawTrackLinesAndTexts(startLine, finishLine);
-                return { startLine, finishLine }; // Return line info for player placement
+                return { startLine, finishLine };
             }
         },
         {
@@ -323,8 +367,8 @@
                 const { playableMinX, playableMaxX, playableMinY, playableMaxY } = getPlayableAreaBounds();
 
                 // Outer boundaries
-                addBlock(0, 0, cols, 2); addBlock(0, rows - 2, cols, 2); // Top/Bottom
-                addBlock(0, 0, 2, rows); addBlock(cols - 2, 0, 2, rows); // Left/Right
+                addBlock(0, 0, cols, 2); addBlock(0, rows - 2, cols, 2);
+                addBlock(0, 0, 2, rows); addBlock(cols - 2, 0, 2, rows);
 
                 // Fill entire inner playable area with walls
                 for (let x = playableMinX; x <= playableMaxX; x++) {
@@ -333,22 +377,20 @@
                     }
                 }
 
-                const pathWidth = 4; // Changed from 3 to 4 as requested
+                const pathWidth = 4;
                 const letterWidth = playableMaxX - playableMinX + 1;
 
                 // Top horizontal bar of Z
                 unblockRectangle(playableMinX, playableMinY, letterWidth, pathWidth);
 
-                // Diagonal stroke (from top-right to bottom-left)
+                // Diagonal stroke
                 unblockDiagonal(playableMaxX - pathWidth + 1, playableMinY, playableMinX, playableMaxY - pathWidth + 1, pathWidth);
 
                 // Bottom horizontal bar of Z
                 unblockRectangle(playableMinX, playableMaxY - pathWidth + 1, letterWidth, pathWidth);
 
-                // Define Start and Finish Line coordinates for Z-Track
-                // Start line: Vertical, at playableMinX, covering the top horizontal bar's height
+                // Define Start and Finish Line coordinates
                 const startLine = { x0: playableMinX, y0: playableMinY, x1: playableMinX, y1: playableMinY + pathWidth -1, type: 'vertical' };
-                // Finish line: Vertical, at playableMaxX, covering the bottom horizontal bar's height
                 const finishLine = { x0: playableMaxX, y0: playableMaxY - pathWidth + 1, x1: playableMaxX, y1: playableMaxY, type: 'vertical' };
                 drawTrackLinesAndTexts(startLine, finishLine);
                 return { startLine, finishLine };
@@ -363,8 +405,8 @@
                 const { playableMinX, playableMaxX, playableMinY, playableMaxY } = getPlayableAreaBounds();
 
                 // Outer boundaries
-                addBlock(0, 0, cols, 2); addBlock(0, rows - 2, cols, 2); // Top/Bottom
-                addBlock(0, 0, 2, rows); addBlock(cols - 2, 0, 2, rows); // Left/Right
+                addBlock(0, 0, cols, 2); addBlock(0, rows - 2, cols, 2);
+                addBlock(0, 0, 2, rows); addBlock(cols - 2, 0, 2, rows);
 
                 // Fill inner area with walls
                 for (let x = playableMinX; x <= playableMaxX; x++) {
@@ -373,7 +415,7 @@
                     }
                 }
 
-                const pathWidth = 4; // Path width of 4 as requested
+                const pathWidth = 4;
                 const letterWidth = playableMaxX - playableMinX + 1;
                 const letterHeight = playableMaxY - playableMinY + 1;
 
@@ -386,10 +428,8 @@
                 // Horizontal connecting bar (middle)
                 unblockRectangle(playableMinX, Math.floor(playableMinY + letterHeight / 2) - Math.floor(pathWidth / 2), letterWidth, pathWidth);
 
-                // Define Start and Finish Line coordinates for H-Track
-                // Start line: Horizontal, at the top of the left vertical bar
+                // Define Start and Finish Line coordinates
                 const startLine = { x0: playableMinX, y0: playableMinY, x1: playableMinX + pathWidth -1, y1: playableMinY, type: 'horizontal' };
-                // Finish line: Horizontal, at the bottom of the right vertical bar
                 const finishLine = { x0: playableMaxX - pathWidth + 1, y0: playableMaxY, x1: playableMaxX, y1: playableMaxY, type: 'horizontal' };
                 drawTrackLinesAndTexts(startLine, finishLine);
                 return { startLine, finishLine };
@@ -404,8 +444,8 @@
                 const { playableMinX, playableMaxX, playableMinY, playableMaxY } = getPlayableAreaBounds();
 
                 // Outer boundaries
-                addBlock(0, 0, cols, 2); addBlock(0, rows - 2, cols, 2); // Top/Bottom
-                addBlock(0, 0, 2, rows); addBlock(cols - 2, 0, 2, rows); // Left/Right
+                addBlock(0, 0, cols, 2); addBlock(0, rows - 2, cols, 2);
+                addBlock(0, 0, 2, rows); addBlock(cols - 2, 0, 2, rows);
 
                 // Fill inner area with walls
                 for (let x = playableMinX; x <= playableMaxX; x++) {
@@ -414,7 +454,7 @@
                     }
                 }
 
-                const pathWidth = 4; // Changed from 3 to 4 as requested
+                const pathWidth = 4;
                 const letterHeight = playableMaxY - playableMinY + 1;
                 const letterWidth = playableMaxX - playableMinX + 1;
 
@@ -427,10 +467,8 @@
                 // Bottom connecting curve/bar
                 unblockRectangle(playableMinX, playableMaxY - pathWidth + 1, letterWidth, pathWidth);
 
-                // Define Start and Finish Line coordinates for U-Track
-                // Start line: Horizontal, at the top-left portion of the U
+                // Define Start and Finish Line coordinates
                 const startLine = { x0: playableMinX, y0: playableMinY, x1: playableMinX + pathWidth -1, y1: playableMinY, type: 'horizontal' };
-                // Finish line: Horizontal, at the top-right portion of the U
                 const finishLine = { x0: playableMaxX - pathWidth + 1, y0: playableMinY, x1: playableMaxX, y1: playableMinY, type: 'horizontal' };
                 drawTrackLinesAndTexts(startLine, finishLine);
                 return { startLine, finishLine };
@@ -445,8 +483,8 @@
                 const { playableMinX, playableMaxX, playableMinY, playableMaxY } = getPlayableAreaBounds();
 
                 // Outer boundaries
-                addBlock(0, 0, cols, 2); addBlock(0, rows - 2, cols, 2); // Top/Bottom
-                addBlock(0, 0, 2, rows); addBlock(cols - 2, 0, 2, rows); // Left/Right
+                addBlock(0, 0, cols, 2); addBlock(0, rows - 2, cols, 2);
+                addBlock(0, 0, 2, rows); addBlock(cols - 2, 0, 2, rows);
 
                 // Fill inner area with walls
                 for (let x = playableMinX; x <= playableMaxX; x++) {
@@ -455,31 +493,31 @@
                     }
                 }
 
-                const pathWidth = 4; // Increased thickness for better playability and guaranteed connection
+                const pathWidth = 4;
                 const letterWidth = playableMaxX - playableMinX + 1;
                 const letterHeight = playableMaxY - playableMinY + 1;
 
-                // Relative coordinates for M points (scaled to playable area)
+                // Relative coordinates for M points
                 const p1x = playableMinX;
-                const p1y = playableMaxY; // Bottom-left
+                const p1y = playableMaxY;
                 const p2x = Math.floor(playableMinX + letterWidth * 0.25);
-                const p2y = playableMinY; // Top-left peak
+                const p2y = playableMinY;
                 const p3x = Math.floor(playableMinX + letterWidth * 0.5);
-                const p3y = Math.floor(playableMinY + letterHeight * 0.5) + Math.floor(pathWidth / 2); // Middle valley
+                const p3y = Math.floor(playableMinY + letterHeight * 0.5) + Math.floor(pathWidth / 2);
                 const p4x = Math.floor(playableMinX + letterWidth * 0.75);
-                const p4y = playableMinY; // Top-right peak
+                const p4y = playableMinY;
                 const p5x = playableMaxX;
-                const p5y = playableMaxY; // Bottom-right
+                const p5y = playableMaxY;
 
                 // Unblock segments of the 'M'
-                unblockDiagonal(p1x, p1y, p2x, p2y, pathWidth); // Bottom-left to top-left peak
-                unblockDiagonal(p2x, p2y, p3x, p3y, pathWidth); // Top-left peak to middle valley
-                unblockDiagonal(p3x, p3y, p4x, p4y, pathWidth); // Middle valley to top-right peak
-                unblockDiagonal(p4x, p4y, p5x, p5y, pathWidth); // Top-right peak to bottom-right
+                unblockDiagonal(p1x, p1y, p2x, p2y, pathWidth);
+                unblockDiagonal(p2x, p2y, p3x, p3y, pathWidth);
+                unblockDiagonal(p3x, p3y, p4x, p4y, pathWidth);
+                unblockDiagonal(p4x, p4y, p5x, p5y, pathWidth);
 
-                // Define Start and Finish Line coordinates for M-Track (both horizontal at the bottom arms)
-                const startLine = { x0: p1x, y0: p1y, x1: p1x + pathWidth -1, y1: p1y, type: 'horizontal' }; // Starts bottom-left horizontal
-                const finishLine = { x0: p5x - pathWidth + 1, y0: p5y, x1: p5x, y1: p5y, type: 'horizontal' }; // Finishes bottom-right horizontal
+                // Define Start and Finish Line coordinates
+                const startLine = { x0: p1x, y0: p1y, x1: p1x + pathWidth -1, y1: p1y, type: 'horizontal' };
+                const finishLine = { x0: p5x - pathWidth + 1, y0: p5y, x1: p5x, y1: p5y, type: 'horizontal' };
                 drawTrackLinesAndTexts(startLine, finishLine);
                 return { startLine, finishLine };
             }
@@ -493,8 +531,8 @@
                 const { playableMinX, playableMaxX, playableMinY, playableMaxY } = getPlayableAreaBounds();
 
                 // Outer boundaries
-                addBlock(0, 0, cols, 2); addBlock(0, rows - 2, cols, 2); // Top/Bottom
-                addBlock(0, 0, 2, rows); addBlock(cols - 2, 0, 2, rows); // Left/Right
+                addBlock(0, 0, cols, 2); addBlock(0, rows - 2, cols, 2);
+                addBlock(0, 0, 2, rows); addBlock(cols - 2, 0, 2, rows);
 
                 // Fill inner area with walls
                 for (let x = playableMinX; x <= playableMaxX; x++) {
@@ -503,7 +541,7 @@
                     }
                 }
 
-                const pathWidth = 4; // Changed from 3 to 4 as requested
+                const pathWidth = 4;
 
                 // Calculate center points for S-curve
                 const midX = Math.floor(playableMinX + (playableMaxX - playableMinX) / 2);
@@ -514,18 +552,13 @@
                 unblockRectangle(playableMinX, playableMinY, pathWidth, midY - playableMinY + pathWidth / 2);
 
                 // Part 2: Diagonal from top-left area to bottom-right area
-                // This will connect the top-left vertical segment to the bottom-right vertical segment
-                // A simplified S curve can be achieved by two diagonal segments.
                 unblockDiagonal(playableMinX, midY, playableMaxX - pathWidth + 1, playableMaxY - pathWidth + 1, pathWidth);
 
                 // Part 3: Bottom-right vertical segment
                 unblockRectangle(playableMaxX - pathWidth + 1, midY - pathWidth / 2, pathWidth, playableMaxY - midY + pathWidth / 2 + 1);
 
-
-                // Define Start and Finish Line coordinates for S-Track (both vertical)
-                // Start line: Vertical, at the very beginning of the left arm
+                // Define Start and Finish Line coordinates
                 const startLine = { x0: playableMinX, y0: playableMinY, x1: playableMinX, y1: playableMinY + pathWidth, type: 'vertical' };
-                // Finish line: Vertical, at the very end of the right arm
                 const finishLine = { x0: playableMaxX, y0: playableMaxY - pathWidth, x1: playableMaxX, y1: playableMaxY, type: 'vertical' };
                 drawTrackLinesAndTexts(startLine, finishLine);
                 return { startLine, finishLine };
@@ -533,37 +566,34 @@
         }
     ];
 
-
     // --- Game State and Setup Variables ---
-    let stagedPlayers = []; // Players selected on the setup screen
-    let selectedTrackId = trackDefinitions[0].id; // Default selected track is the first one (Simple Sprint now)
+    let stagedPlayers = [];
+    let selectedTrackId = trackDefinitions[0].id;
 
-    // Game state variables - entirely local now
+    // Game state variables
     let gameState = {
-      players: [], // Will be populated from initGame based on stagedPlayers
+      players: [],
       currentPlayerIndex: 0,
-      gameStatus: 'playing', // 'playing', 'finished' (removed 'finishing_round')
-      finishedPlayers: [], // Stores indices of players who crossed finish line
-      winnerIndex: null, // Stores index of the winning player
-      turnCount: 0 // Track overall turns
+      gameStatus: 'playing',
+      finishedPlayers: [],
+      winnerIndex: null,
+      turnCount: 0
     };
 
-    let blockedCells = new Set(); // Set to store coordinates of all blocked cells (walls and boundaries)
-    let flashing = false; // Flag to control crash animation
-    let animationFrameId = null; // To store the requestAnimationFrame ID
+    let blockedCells = new Set();
+    let flashing = false;
+    let animationFrameId = null;
+
+    // Global variables to store the selected target velocity
+    let selectedVx = 0;
+    let selectedVy = 0;
 
     // --- Custom Message Box Functions ---
     const messageBoxOverlay = document.getElementById('messageBoxOverlay');
     const messageBoxText = document.getElementById('messageBoxText');
     const messageBoxContent = document.getElementById('messageBoxContent');
-    let messageBoxCallback = null; // Store callback for when OK is pressed
+    let messageBoxCallback = null;
 
-    /**
-     * Displays a custom message box.
-     * @param {string} message - The message to display.
-     * @param {string} type - 'success' or 'error' (for future styling differentiation if needed).
-     * @param {function} callback - Optional function to call when 'OK' is clicked.
-     */
     function showMessageBox(message, type = "info", callback = null) {
       if (!messageBoxOverlay || !messageBoxText || !messageBoxContent) {
           console.error("Message box elements not found in DOM yet. Cannot display message:", message);
@@ -571,77 +601,52 @@
       }
       messageBoxText.innerText = message;
       messageBoxOverlay.classList.remove('hidden');
-      messageBoxCallback = callback; // Store the callback
-      // Optional: Add type-based styling to messageBoxContent
+      messageBoxCallback = callback;
       if (type === 'error') {
-        messageBoxContent.classList.remove('border-blue-500');
-        messageBoxContent.style.border = '2px solid #EF4444'; // Red border for errors
+        messageBoxContent.style.border = '2px solid #EF4444';
       } else if (type === 'success') {
-        messageBoxContent.classList.remove('border-red-500');
-        messageBoxContent.style.border = '2px solid #10B981'; // Green border for success
+        messageBoxContent.style.border = '2px solid #10B981';
       } else {
-        messageBoxContent.style.border = 'none'; // Default
+        messageBoxContent.style.border = 'none';
       }
     }
 
-    /**
-     * Hides the custom message box and executes any pending callback.
-     */
     function hideMessageBox() {
       if (!messageBoxOverlay) return;
       messageBoxOverlay.classList.add('hidden');
       if (messageBoxCallback) {
-        messageBoxCallback(); // Execute callback if it exists
-        messageBoxCallback = null; // Clear callback
+        messageBoxCallback();
+        messageBoxCallback = null;
       }
     }
 
     // --- Utility Functions ---
-
-    /**
-     * Generates a unique string key for a given grid cell.
-     * @param {number} x - X-coordinate of the cell.
-     * @param {number} y - Y-coordinate of the cell.
-     * @returns {string} Unique key for the cell.
-     */
     function cellKey(x, y) {
       return `${x},${y}`;
     }
 
-    /**
-     * Adds a rectangular block of cells to the blockedCells set.
-     * @param {number} startX - Starting X-coordinate of the block.
-     * @param {number} startY - Starting Y-coordinate of the block.
-     * @param {number} width - Width of the rectangle (grid units).
-     * @param {number} height - Height of the rectangle (grid units).
-     */
-    function addBlock(startX, startY, width, height) {
-      for (let x = startX; x < startX + width; x++) {
-        for (let y = startY; y < startY + height; y++) {
-          blockedCells.add(cellKey(x, y));
+    function setControlButtonsState(enableMovementGrid, enableConfirmMoveButton, enableClearSelectionButton) {
+        const confirmMoveBtn = document.getElementById('confirmMoveButton');
+        if (confirmMoveBtn) {
+            confirmMoveBtn.disabled = !enableConfirmMoveButton;
         }
-      }
-    }
 
-    /**
-     * Sets the disabled state of all game control buttons.
-     * @param {boolean} enableVelocity - True to enable velocity change buttons, false to disable.
-     * @param {boolean} enableMove - True to enable the move button, false to disable.
-     */
-    function setControlButtonsState(enableVelocity, enableMove) {
-        document.getElementById('vxMinus').disabled = !enableVelocity;
-        document.getElementById('vxPlus').disabled = !enableVelocity;
-        document.getElementById('vyMinus').disabled = !enableVelocity;
-        document.getElementById('vyPlus').disabled = !enableVelocity;
-        document.getElementById('moveButton').disabled = !enableMove;
-        document.getElementById('resetButton').disabled = false; // Always enabled
+        const clearSelectionBtn = document.getElementById('clearSelectionButton');
+        if (clearSelectionBtn) {
+            clearSelectionBtn.disabled = !enableClearSelectionButton;
+        }
+
+        const movementControlDiv = document.getElementById('movementControl');
+        if (movementControlDiv) {
+            if (enableMovementGrid) {
+                movementControlDiv.classList.remove('pointer-events-none', 'opacity-50');
+            } else {
+                movementControlDiv.classList.add('pointer-events-none', 'opacity-50');
+            }
+        }
     }
 
     // --- Drawing Functions ---
-
-    /**
-     * Draws the grid lines on the canvas.
-     */
     function drawGrid() {
       ctx.strokeStyle = "#E5E7EB";
       ctx.lineWidth = 1;
@@ -655,62 +660,38 @@
       }
     }
 
-    /**
-     * Defines and draws the track area, including boundaries, start/finish lines, and wall hurdles.
-     */
     function drawTrackArea() {
-      // The track layout is now determined by the selectedTrackId
       const selectedTrack = trackDefinitions.find(t => t.id === selectedTrackId);
       if (selectedTrack) {
-          selectedTrack.drawLayout(); // This will populate `blockedCells` and draw specific lines
+          selectedTrack.drawLayout();
       } else {
-          // Fallback if somehow no track is selected or found (shouldn't happen with default)
-          console.error("No track selected or found. Drawing default layout.");
           trackDefinitions[0].drawLayout();
       }
 
       // Draw all blocked cells (walls)
-      ctx.fillStyle = "#4B5563"; // Dark gray for walls (Tailwind gray-700)
+      ctx.fillStyle = "#4B5563";
       blockedCells.forEach(key => {
         const [x, y] = key.split(',').map(Number);
         ctx.fillRect(x * gridSize, y * gridSize, gridSize, gridSize);
       });
-
-      // Note: Start/Finish lines and text are now drawn within each track's drawLayout function.
     }
 
-    /**
-     * Shows a preview of the next potential move for the current player's car.
-     */
     function showNextMovePreview() {
       const currentPlayer = gameState.players[gameState.currentPlayerIndex];
       if (!currentPlayer || currentPlayer.hasFinished || gameState.gameStatus === 'finished') return;
 
-      const nx = currentPlayer.x + currentPlayer.vx;
-      const ny = currentPlayer.y + currentPlayer.vy;
+      if (!currentPlayer.hasChangedVelocityThisTurn || currentPlayer.isAnimating) {
+          return;
+      }
+
+      const nx = currentPlayer.x + selectedVx;
+      const ny = currentPlayer.y + selectedVy;
       ctx.fillStyle = "rgba(59, 130, 246, 0.4)";
       ctx.beginPath();
       ctx.arc(nx * gridSize, ny * gridSize, 7, 0, 2 * Math.PI);
       ctx.fill();
     }
 
-    /**
-     * Updates the velocity display text for the current player's car.
-     */
-    function updateVelocityDisplay() {
-        const currentPlayer = gameState.players[gameState.currentPlayerIndex];
-        if (currentPlayer) {
-            document.getElementById("velocity").innerText = `Current Player's Velocity: (${currentPlayer.vx}, ${currentPlayer.vy})`;
-        } else {
-            document.getElementById("velocity").innerText = `Current Player's Velocity: (0, 0)`;
-        }
-    }
-
-
-    /**
-     * Draws all players and their path histories, incorporating animation.
-     * @param {number} timestamp - The current timestamp from requestAnimationFrame.
-     */
     function drawPlayers(timestamp) {
         if (!gameState.players || gameState.players.length === 0) return;
 
@@ -718,30 +699,25 @@
             let currentDrawX = p.x;
             let currentDrawY = p.y;
 
-            // If player is animating, calculate interpolated position
             if (p.isAnimating && p.animationStartTime !== null) {
                 const elapsed = timestamp - p.animationStartTime;
-                const progress = Math.min(elapsed / p.animationDuration, 1); // 0 to 1
+                const progress = Math.min(elapsed / p.animationDuration, 1);
 
                 currentDrawX = p.animationStartPos[0] + (p.animationEndPos[0] - p.animationStartPos[0]) * progress;
                 currentDrawY = p.animationStartPos[1] + (p.animationEndPos[1] - p.animationStartPos[1]) * progress;
 
-                // If animation is complete, update player's actual position
                 if (progress === 1) {
                     p.isAnimating = false;
                     p.animationStartTime = null;
                     p.x = p.animationEndPos[0];
                     p.y = p.animationEndPos[1];
-                    // Only add to path if it's a *successful* move and not a crash-back
-                    // The path is already updated for crashes *before* animation
-                    if (!p.isCrashAnimation) { // Use a flag to differentiate animation types
+                    if (!p.isCrashAnimation) {
                         p.path.push([p.x, p.y]);
                     }
-                    // Once animation is done, proceed with turn end logic
                     if (p.animationCompletionCallback) {
                         p.animationCompletionCallback();
-                        p.animationCompletionCallback = null; // Clear callback
-                        p.isCrashAnimation = false; // Reset crash animation flag
+                        p.animationCompletionCallback = null;
+                        p.isCrashAnimation = false;
                     }
                 }
             }
@@ -749,10 +725,8 @@
             ctx.strokeStyle = p.color;
             ctx.lineWidth = 2;
 
-            // Draw path history up to the current animated point
             ctx.beginPath();
             if (p.path && p.path.length > 0) {
-                // Draw up to the last confirmed position
                 p.path.forEach(([x, y], i) => {
                     const px = x * gridSize;
                     const py = y * gridSize;
@@ -760,19 +734,16 @@
                     else ctx.lineTo(px, py);
                 });
             }
-            // If animating, draw line segment to current animated position
             if (p.isAnimating) {
                 ctx.lineTo(currentDrawX * gridSize, currentDrawY * gridSize);
             }
             ctx.stroke();
 
-
             ctx.fillStyle = p.color;
             ctx.beginPath();
-            ctx.arc(currentDrawX * gridSize, currentDrawY * gridSize, 5, 0, 2 * Math.PI); // Player dot at interpolated position
+            ctx.arc(currentDrawX * gridSize, currentDrawY * gridSize, 5, 0, 2 * Math.PI);
             ctx.fill();
 
-            // Highlight current player's car
             if (index === gameState.currentPlayerIndex && gameState.gameStatus === 'playing') {
                 ctx.strokeStyle = 'gold';
                 ctx.lineWidth = 3;
@@ -782,49 +753,88 @@
             }
         });
 
-        // Request next frame if any player is still animating
         if (gameState.players.some(p => p.isAnimating)) {
             animationFrameId = requestAnimationFrame(animateGameLoop);
         } else {
-            animationFrameId = null; // No more animations, stop loop
+            animationFrameId = null;
         }
     }
 
-    /**
-     * The main game animation loop.
-     * @param {DOMHighResTimeStamp} timestamp - The current time provided by requestAnimationFrame.
-     */
     function animateGameLoop(timestamp) {
-        ctx.clearRect(0, 0, canvas.width, canvas.height); // Clear entire canvas
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
         drawGrid();
         drawTrackArea();
-        drawPlayers(timestamp); // Pass timestamp to drawPlayers for animation
+        drawPlayers(timestamp);
         showNextMovePreview();
-        updateVelocityDisplay();
     }
 
-    /**
-     * Main render function to trigger a screen update.
-     * This now initiates the animation loop if it's not already running.
-     */
     function render() {
         if (!animationFrameId) {
             animationFrameId = requestAnimationFrame(animateGameLoop);
         }
     }
 
-
     // --- UI Update Functions ---
+    function drawMovementSelectionGrid() {
+        const movementControl = document.getElementById('movementControl');
+        if (!movementControl) return;
 
-    /**
-     * Updates UI elements based on the current game state.
-     */
+        movementControl.innerHTML = '';
+
+        const currentPlayer = gameState.players[gameState.currentPlayerIndex];
+        const areControlsActive = (currentPlayer && !currentPlayer.hasFinished && gameState.gameStatus === 'playing' && !currentPlayer.isAnimating);
+
+        setControlButtonsState(
+            areControlsActive && !currentPlayer.hasChangedVelocityThisTurn,
+            areControlsActive && currentPlayer.hasChangedVelocityThisTurn,
+            areControlsActive && currentPlayer.hasChangedVelocityThisTurn
+        );
+
+        const currentVx = currentPlayer ? currentPlayer.vx : 0;
+        const currentVy = currentPlayer ? currentPlayer.vy : 0;
+
+        for (let dyGrid = -1; dyGrid <= 1; dyGrid++) {
+            for (let dxGrid = -1; dxGrid <= 1; dxGrid++) {
+                const targetVx = currentVx + dxGrid;
+                const targetVy = currentVy + dyGrid;
+
+                const button = document.createElement('button');
+                button.className = 'w-full h-full flex items-center justify-center text-sm font-semibold rounded ' +
+                                   'transition-colors duration-150 ease-in-out ' +
+                                   'movement-grid-button';
+
+                const iconSVG = `
+                    <svg class="w-8 h-8" fill="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                        ${getDirectionIcon(dxGrid, dyGrid)}
+                    </svg>
+                `;
+
+                button.setAttribute('title', `Change velocity to (${targetVx}, ${targetVy})`);
+                button.innerHTML = iconSVG;
+
+                if (selectedVx === targetVx && selectedVy === targetVy && currentPlayer.hasChangedVelocityThisTurn) {
+                    button.classList.add('selected-move');
+                }
+
+                if (!areControlsActive || currentPlayer.hasChangedVelocityThisTurn) {
+                    button.disabled = true;
+                    button.classList.add('opacity-50', 'cursor-not-allowed');
+                } else {
+                    button.disabled = false;
+                    button.classList.remove('opacity-50', 'cursor-not-allowed');
+                    button.onclick = () => selectNextMove(targetVx, targetVy);
+                }
+
+                movementControl.appendChild(button);
+            }
+        }
+    }
+
     function updateGameUI() {
         document.getElementById('gameStatusInfo').innerText = `Status: ${gameState.gameStatus.replace(/_/g, ' ')}`;
 
-        // Update player list
         const playersContainer = document.getElementById('playersContainer');
-        playersContainer.innerHTML = ''; // Clear existing list
+        playersContainer.innerHTML = '';
         gameState.players.forEach((p, index) => {
             const li = document.createElement('li');
             li.className = 'flex items-center';
@@ -834,7 +844,7 @@
             li.appendChild(colorBox);
             li.appendChild(document.createTextNode(`Player ${index + 1}`));
             if (index === gameState.currentPlayerIndex) {
-                li.classList.add('font-bold', 'text-purple-700'); // Highlight current player
+                li.classList.add('font-bold', 'text-purple-700');
             }
             if (p.hasFinished) {
                 li.classList.add('line-through', 'opacity-70');
@@ -842,181 +852,219 @@
             playersContainer.appendChild(li);
         });
 
-        // Update current turn info and button states
         if (gameState.players.length > 0) {
             document.getElementById('currentTurnInfo').innerText = `Player ${gameState.currentPlayerIndex + 1}'s Turn!`;
             const currentPlayer = gameState.players[gameState.currentPlayerIndex];
-            // Controls enabled only if game is playing and no animation is active
-            const canControl = (gameState.gameStatus === 'playing' && !currentPlayer.isAnimating);
-
-            // Velocity buttons disabled if already changed this turn, or if controls are generally disabled
-            setControlButtonsState(canControl && !currentPlayer.hasChangedVelocityThisTurn, canControl);
+            document.getElementById("velocity").innerText = `(${currentPlayer.vx}, ${currentPlayer.vy})`;
         } else {
             document.getElementById('currentTurnInfo').innerText = "Game not initialized.";
-            setControlButtonsState(false, false); // Disable all if no players/game not started
+            document.getElementById("velocity").innerText = `(0, 0)`;
         }
 
-        // Show winner if game finished
+        drawMovementSelectionGrid();
+
         if (gameState.gameStatus === 'finished' && gameState.winnerIndex !== null) {
-            // Message box handled directly by determineWinner()
-            setControlButtonsState(false, false); // Disable controls after game ends
+            setControlButtonsState(false, false, false);
         }
     }
-
 
     // --- Game Logic Functions ---
+    function tracePathAndFindCollision(startX, startY, endX, endY, currentPlayerId) {
+        let lastValidX = startX;
+        let lastValidY = startY;
+        let didCrash = false;
+        let collisionType = null;
+        let collidedWithPlayerId = null;
 
-    /**
-     * Changes the current player's X-velocity.
-     * @param {number} delta - Amount to change velocity by (typically -1 or 1).
-     */
-    function changeVX(delta) {
-        if (flashing || gameState.gameStatus !== 'playing') return; // Only allow changes if playing
+        const dx = Math.abs(endX - startX);
+        const dy = Math.abs(endY - startY);
+        const sx = (startX < endX) ? 1 : -1;
+        const sy = (startY < endY) ? 1 : -1;
+        let err = dx - dy;
 
+        let currentX = startX;
+        let currentY = startY;
+
+        while (true) {
+            if (currentX < 0 || currentX >= cols || currentY < 0 || currentY >= rows || blockedCells.has(cellKey(currentX, currentY))) {
+                didCrash = true;
+                collisionType = 'wall';
+                break;
+            }
+
+            if (!(currentX === startX && currentY === startY)) {
+                const otherPlayer = gameState.players.find(p =>
+                    p.id !== currentPlayerId && 
+                    Math.round(p.x) === Math.round(currentX) && 
+                    Math.round(p.y) === Math.round(currentY)
+                );
+                if (otherPlayer) {
+                    didCrash = true;
+                    collisionType = 'player';
+                    collidedWithPlayerId = otherPlayer.id;
+                    break;
+                }
+            }
+
+            lastValidX = currentX;
+            lastValidY = currentY;
+
+            if (currentX === endX && currentY === endY) break;
+
+            const e2 = 2 * err;
+            if (e2 > -dy) {
+                err -= dy;
+                currentX += sx;
+            }
+            if (e2 < dx) {
+                err += dx;
+                currentY += sy;
+            }
+        }
+        return { x: lastValidX, y: lastValidY, didCrash, collisionType, collidedWithPlayerId };
+    }
+
+    function selectNextMove(newVx, newVy) {
         const currentPlayer = gameState.players[gameState.currentPlayerIndex];
-        if (!currentPlayer) return;
+        if (!currentPlayer || currentPlayer.hasFinished || gameState.gameStatus !== 'playing') return;
 
-        // Check if velocity has already been changed this turn
-        if (currentPlayer.hasChangedVelocityThisTurn) {
-            showMessageBox("You can only change velocity once per turn (either X or Y). Click 'Move' to proceed.", "info");
+        currentPlayer.previousVx = currentPlayer.vx;
+        currentPlayer.previousVy = currentPlayer.vy;
+
+        currentPlayer.vx = newVx;
+        currentPlayer.vy = newVy;
+        currentPlayer.hasChangedVelocityThisTurn = true;
+
+        selectedVx = newVx;
+        selectedVy = newVy;
+
+        updateGameUI();
+        render();
+    }
+
+    async function confirmMove() {
+        const currentPlayer = gameState.players[gameState.currentPlayerIndex];
+        if (!currentPlayer || currentPlayer.isAnimating || gameState.gameStatus !== 'playing' || !currentPlayer.hasChangedVelocityThisTurn) {
+            console.warn("Attempted to confirm move in an invalid state.");
             return;
         }
 
-        currentPlayer.vx += delta;
-        currentPlayer.hasChangedVelocityThisTurn = true;
-
-        updateGameUI(); // Update UI to reflect disabled velocity buttons
-        render(); // Re-render with updated velocity preview
+        await movePlayer();
     }
 
-    /**
-     * Changes the current player's Y-velocity.
-     * @param {number} delta - Amount to change velocity by (typically -1 or 1).
-     */
-    function changeVY(delta) {
-        if (flashing || gameState.gameStatus !== 'playing') return; // Only allow changes if playing
-
+    function clearSelectedMove() {
         const currentPlayer = gameState.players[gameState.currentPlayerIndex];
-        if (!currentPlayer) return;
+        if (!currentPlayer || currentPlayer.isAnimating || gameState.gameStatus !== 'playing') return;
 
-        // Check if velocity has already been changed this turn
-        if (currentPlayer.hasChangedVelocityThisTurn) {
-            showMessageBox("You can only change velocity once per turn (either X or Y). Click 'Move' to proceed.", "info");
-            return;
-        }
+        currentPlayer.vx = currentPlayer.previousVx;
+        currentPlayer.vy = currentPlayer.previousVy;
+        currentPlayer.hasChangedVelocityThisTurn = false;
 
-        currentPlayer.vy += delta;
-        currentPlayer.hasChangedVelocityThisTurn = true;
+        selectedVx = currentPlayer.vx;
+        selectedVy = currentPlayer.vy;
 
-        updateGameUI(); // Update UI to reflect disabled velocity buttons
-        render(); // Re-render with updated velocity preview
+        updateGameUI();
+        render();
     }
 
-    /**
-     * Advances to the next player's turn. This function is for regular turn progression.
-     */
     async function advancePlayerTurn() {
-        if (gameState.gameStatus === 'finished') return; // Do not advance turn if game is over
+        if (gameState.gameStatus === 'finished') return;
 
         let nextPlayerIndex = (gameState.currentPlayerIndex + 1) % gameState.players.length;
-        gameState.turnCount++; // Increment total turns
+        gameState.turnCount++;
 
-        // Reset hasChangedVelocityThisTurn for the new current player
         if (gameState.players[nextPlayerIndex]) {
             gameState.players[nextPlayerIndex].hasChangedVelocityThisTurn = false;
+            selectedVx = 0;
+            selectedVy = 0;
         }
 
-        // Skip players who have already finished
         let attempts = 0;
         while (gameState.players[nextPlayerIndex].hasFinished && attempts < gameState.players.length) {
             nextPlayerIndex = (nextPlayerIndex + 1) % gameState.players.length;
             attempts++;
         }
-        // If all players have finished, this loop will return to the current player, and the game will likely already be finished
+
         if (attempts === gameState.players.length && gameState.players[nextPlayerIndex].hasFinished) {
-            // This case means all players have finished their turns or crossed the line.
-            // The `determineWinner` should have already been called if someone finished.
             return;
         }
 
         gameState.currentPlayerIndex = nextPlayerIndex;
         updateGameUI();
-        render(); // Initial render for the new player's turn (before they move)
+        render();
     }
 
-
-    /**
-     * Handles the end of a player's turn, including post-crash logic.
-     * This is called AFTER animation completes (or immediately for instant actions).
-     * @param {boolean} isCrash - True if the turn ended due to a crash.
-     */
     async function handleTurnEnd(isCrash = false) {
-        if (gameState.gameStatus === 'finished') return; // Do not proceed if game is already over
+        if (gameState.gameStatus === 'finished') return;
 
-        // If single player and crashed, their turn effectively restarts immediately
+        selectedVx = 0;
+        selectedVy = 0;
+
         if (isCrash && gameState.players.length === 1) {
-            // Velocity is already reset by crash logic.
-            // Reset hasChangedVelocityThisTurn for current player
             gameState.players[gameState.currentPlayerIndex].hasChangedVelocityThisTurn = false;
-            updateGameUI(); // This will re-enable buttons for the current player
+            updateGameUI();
             render();
         } else {
-            // For multiplayer crashes or any successful move, advance to next player
             await advancePlayerTurn();
         }
     }
 
-
-    /**
-     * Attempts to move the current player based on current velocity.
-     * Handles collisions and win condition.
-     */
     async function movePlayer() {
         if (flashing || gameState.gameStatus === 'finished') return;
 
         const currentPlayer = gameState.players[gameState.currentPlayerIndex];
         if (!currentPlayer) return;
 
-        // Disable controls during calculation/animation
-        setControlButtonsState(false, false);
+        setControlButtonsState(false, false, false);
 
-        if (currentPlayer.hasFinished) { // If a player has already finished, they cannot move again
-            // This check is mainly for 'finishing_round' logic which is now removed.
-            // With immediate game over, this block might be less critical.
-            showMessageBox("You have already finished the race! Game is ending.", "info", async () => {
-                // If game is finished, determineWinner should have been called.
-                // Just hide the box.
-            });
+        if (currentPlayer.hasFinished) {
+            showMessageBox("You have already finished the race! Game is ending.", "info");
             return;
         }
 
-        // Velocity must not be (0,0) after initial setup turns.
-        // During initial setup (turnCount < numPlayers), players can start from (0,0).
-        // After that, (0,0) velocity should only be if they crash.
         if (gameState.turnCount >= gameState.players.length && currentPlayer.vx === 0 && currentPlayer.vy === 0) {
-            showMessageBox("Velocity (0,0) is not allowed after initial setup. Change your velocity before moving.", "error", () => {
-                // If they need to change velocity, re-enable controls for the current player's turn
-                currentPlayer.hasChangedVelocityThisTurn = false; // Allow velocity change after 0,0 error
-                setControlButtonsState(true, true);
+            showMessageBox("Velocity (0,0) is not allowed after initial setup. Please select a non-zero velocity.", "error", () => {
+                currentPlayer.hasChangedVelocityThisTurn = false;
+                currentPlayer.vx = currentPlayer.previousVx;
+                currentPlayer.vy = currentPlayer.previousVy;
+                selectedVx = currentPlayer.vx;
+                selectedVy = currentPlayer.vy;
+                updateGameUI();
                 render();
             });
             return;
         }
 
-        // Calculate next potential position based on current velocity
         const nextPotentialX = currentPlayer.x + currentPlayer.vx;
         const nextPotentialY = currentPlayer.y + currentPlayer.vy;
 
-        let crashOccurred = false;
-        let crashMessage = "";
-        let finalPlayerX = nextPotentialX;
-        let finalPlayerY = nextPotentialY;
+        const collisionResult = tracePathAndFindCollision(
+            currentPlayer.x,
+            currentPlayer.y,
+            nextPotentialX,
+            nextPotentialY,
+            currentPlayer.id
+        );
 
-        // --- Prioritize Win Condition ---
-        // Get the actual startLine and finishLine from the currently selected track
+        let crashOccurred = collisionResult.didCrash;
+        let crashMessage = "";
+        let finalPlayerX = collisionResult.x;
+        let finalPlayerY = collisionResult.y;
+
+        if (collisionResult.collisionType === 'player') {
+            showMessageBox(`WARNING! Player ${gameState.currentPlayerIndex + 1} cannot move to (${nextPotentialX}, ${nextPotentialY}) because another player is there. Please adjust your velocity.`, "info", () => {
+                currentPlayer.hasChangedVelocityThisTurn = false;
+                currentPlayer.vx = currentPlayer.previousVx;
+                currentPlayer.vy = currentPlayer.previousVy;
+                selectedVx = currentPlayer.vx;
+                selectedVy = currentPlayer.vy;
+                updateGameUI();
+                render();
+            });
+            return;
+        }
+
         const currentTrack = trackDefinitions.find(t => t.id === selectedTrackId);
-        // It's important to call drawLayout() here to get the up-to-date line definitions
-        // as they might be dynamically calculated or depend on canvas size.
         const { finishLine } = currentTrack.drawLayout();
 
         let crossedFinishLine = false;
@@ -1025,150 +1073,96 @@
             const maxX = Math.max(finishLine.x0, finishLine.x1);
             const yThreshold = finishLine.y0;
 
-            // Determine crossing direction based on line's Y position relative to canvas center
-            if (yThreshold < (rows / 2)) { // This is a top horizontal line (cross by decreasing Y)
+            if (yThreshold < (rows / 2)) {
                 crossedFinishLine = (nextPotentialY <= yThreshold) && (nextPotentialX >= minX && nextPotentialX <= maxX);
                 if (crossedFinishLine) {
-                    currentPlayer.distancePastFinishLine = yThreshold - nextPotentialY; // Positive if currentY is smaller than yThreshold
+                    currentPlayer.distancePastFinishLine = yThreshold - nextPotentialY;
                 }
-            } else { // This is a bottom horizontal line (cross by increasing Y)
+            } else {
                 crossedFinishLine = (nextPotentialY >= yThreshold) && (nextPotentialX >= minX && nextPotentialX <= maxX);
                 if (crossedFinishLine) {
-                    currentPlayer.distancePastFinishLine = nextPotentialY - yThreshold; // Positive if currentY is larger than yThreshold
+                    currentPlayer.distancePastFinishLine = nextPotentialY - yThreshold;
                 }
             }
-        } else { // vertical finish line
+        } else {
             const minY = Math.min(finishLine.y0, finishLine.y1);
             const maxY = Math.max(finishLine.y0, finishLine.y1);
             const xThreshold = finishLine.x0;
 
-            // Determine crossing direction based on line's X position relative to canvas center
-            if (xThreshold < (cols / 2)) { // This is a left vertical line (cross by decreasing X)
+            if (xThreshold < (cols / 2)) {
                 crossedFinishLine = (nextPotentialX <= xThreshold) && (nextPotentialY >= minY && nextPotentialY <= maxY);
                 if (crossedFinishLine) {
-                    currentPlayer.distancePastFinishLine = xThreshold - nextPotentialX; // Positive if currentX is smaller than xThreshold
+                    currentPlayer.distancePastFinishLine = xThreshold - nextPotentialX;
                 }
-            } else { // This is a right vertical line (cross by increasing X)
+            } else {
                 crossedFinishLine = (nextPotentialX >= xThreshold) && (nextPotentialY >= minY && nextPotentialY <= maxY);
                 if (crossedFinishLine) {
-                    currentPlayer.distancePastFinishLine = nextPotentialX - xThreshold; // Positive if currentX is larger than xThreshold
+                    currentPlayer.distancePastFinishLine = nextPotentialX - xThreshold;
                 }
             }
         }
 
-
         if (crossedFinishLine) {
-            // Player has crossed the finish line!
             currentPlayer.hasFinished = true;
-            gameState.gameStatus = 'finished'; // Game is immediately over
-            gameState.finishedPlayers.push(gameState.currentPlayerIndex);
+            gameState.gameStatus = 'finished';
 
-            // Set final position to the intended next position, even if it's "off-track"
             finalPlayerX = nextPotentialX;
             finalPlayerY = nextPotentialY;
 
-            // Animate to the final position beyond the finish line
             currentPlayer.isAnimating = true;
             currentPlayer.animationStartTime = performance.now();
             currentPlayer.animationDuration = 300;
             currentPlayer.animationStartPos = [currentPlayer.x, currentPlayer.y];
             currentPlayer.animationEndPos = [finalPlayerX, finalPlayerY];
-            currentPlayer.isCrashAnimation = false; // It's a win, not a crash animation
+            currentPlayer.isCrashAnimation = false;
 
             currentPlayer.animationCompletionCallback = async () => {
-                currentPlayer.path.push([currentPlayer.x, currentPlayer.y]); // Add final position to path
-                await determineWinner(); // Declare winner immediately
+                currentPlayer.path.push([currentPlayer.x, currentPlayer.y]);
+                await determineWinner();
             };
-        } else {
-            // --- Player Collision Check (prevents movement, keeps turn) ---
-            const otherPlayers = gameState.players.filter((p, idx) => idx !== gameState.currentPlayerIndex && !p.hasFinished);
-            if (otherPlayers.some(p => p.x === nextPotentialX && p.y === nextPotentialY)) {
-                showMessageBox(`WARNING! Player ${gameState.currentPlayerIndex + 1} cannot move to (${nextPotentialX}, ${nextPotentialY}) because another player is there. Please adjust your velocity.`, "info", () => {
-                    currentPlayer.hasChangedVelocityThisTurn = false; // Allow them to change velocity again
-                    setControlButtonsState(true, true); // Re-enable all controls for the current player
-                    render(); // Re-render to update UI (buttons, preview, etc.)
-                });
-                return; // Prevent further move logic, current player's turn continues
-            }
+        } else if (crashOccurred) {
+            crashMessage = "CRASH! You hit a wall or went out of bounds. Velocity reset. Your position reverted to the closest valid spot.";
+            currentPlayer.vx = 0;
+            currentPlayer.vy = 0;
 
-            // --- Wall/Boundary Collision Check (causes crash, advances turn) ---
-            if (blockedCells.has(cellKey(nextPotentialX, nextPotentialY))) {
-                crashOccurred = true;
-                crashMessage = "CRASH! You hit a wall or went out of bounds. Velocity reset. Your position reverted to last valid spot.";
-
-                // Crash Position Resolution (this part is generic and should work fine)
-                const attemptedDx = currentPlayer.vx;
-                const attemptedDy = currentPlayer.vy;
-
-                // Try moving only in X direction
-                const movedXOnlyBlocked = blockedCells.has(cellKey(currentPlayer.x + attemptedDx, currentPlayer.y));
-                // Try moving only in Y direction
-                const movedYOnlyBlocked = blockedCells.has(cellKey(currentPlayer.x, currentPlayer.y + attemptedDy));
-
-                if (!movedXOnlyBlocked && !movedYOnlyBlocked) {
-                    finalPlayerX = currentPlayer.lastValidX;
-                    finalPlayerY = currentPlayer.lastValidY;
-                } else if (movedXOnlyBlocked && !movedYOnlyBlocked) {
-                    finalPlayerX = currentPlayer.x;
-                    finalPlayerY = currentPlayer.y + attemptedDy;
-                } else if (!movedXOnlyBlocked && movedYOnlyBlocked) {
-                    finalPlayerX = currentPlayer.x + attemptedDx;
-                    finalPlayerY = currentPlayer.y;
-                } else {
-                    finalPlayerX = currentPlayer.lastValidX;
-                    finalPlayerY = currentPlayer.lastValidY;
-                }
-
-                // Final check: if the resolved position is still blocked, definitely revert.
-                if (blockedCells.has(cellKey(finalPlayerX, finalPlayerY))) {
-                    finalPlayerX = currentPlayer.lastValidX;
-                    finalPlayerY = currentPlayer.lastValidY;
-                }
-
-            }
-
-            // Animate for crash or normal move (within track)
             currentPlayer.isAnimating = true;
             currentPlayer.animationStartTime = performance.now();
             currentPlayer.animationDuration = 300;
             currentPlayer.animationStartPos = [currentPlayer.x, currentPlayer.y];
+            currentPlayer.animationEndPos = [finalPlayerX, finalPlayerY];
+            currentPlayer.isCrashAnimation = true;
 
-            if (crashOccurred) {
-                currentPlayer.vx = 0; // Reset velocity on crash
-                currentPlayer.vy = 0;
-                currentPlayer.animationEndPos = [finalPlayerX, finalPlayerY];
-                currentPlayer.isCrashAnimation = true;
-                currentPlayer.animationCompletionCallback = async () => {
-                    await flashCrash(nextPotentialX, nextPotentialY); // Flash at attempted crash location
-                    showMessageBox(crashMessage, "error", async () => {
-                        updateGameUI(); // Re-render to show updated velocity/position
-                        await handleTurnEnd(true); // Indicate crash
-                    });
-                };
-            } else {
-                currentPlayer.animationEndPos = [nextPotentialX, nextPotentialY];
-                currentPlayer.isCrashAnimation = false;
-                currentPlayer.animationCompletionCallback = async () => {
-                    currentPlayer.path.push([currentPlayer.x, currentPlayer.y]); // Add new position to path
-                    currentPlayer.lastValidX = currentPlayer.x; // Update last valid for next turn
-                    currentPlayer.lastValidY = currentPlayer.y;
-                    await handleTurnEnd(false); // Normal turn end
-                };
-            }
+            currentPlayer.animationCompletionCallback = async () => {
+                await flashCrash(nextPotentialX, nextPotentialY);
+                showMessageBox(crashMessage, "error", async () => {
+                    updateGameUI();
+                    await handleTurnEnd(true);
+                });
+            };
+        } else {
+            currentPlayer.isAnimating = true;
+            currentPlayer.animationStartTime = performance.now();
+            currentPlayer.animationDuration = 300;
+            currentPlayer.animationStartPos = [currentPlayer.x, currentPlayer.y];
+            currentPlayer.animationEndPos = [nextPotentialX, nextPotentialY];
+            currentPlayer.isCrashAnimation = false;
+
+            currentPlayer.animationCompletionCallback = async () => {
+                currentPlayer.path.push([currentPlayer.x, currentPlayer.y]);
+                currentPlayer.lastValidX = currentPlayer.x;
+                currentPlayer.lastValidY = currentPlayer.y;
+                await handleTurnEnd(false);
+            };
         }
 
-        // Start the animation loop if not already running
         if (!animationFrameId) {
             animationFrameId = requestAnimationFrame(animateGameLoop);
         }
     }
 
-    /**
-     * Determines the winner when the game concludes.
-     */
     async function determineWinner() {
         let winningPlayerIndex = null;
-        let bestDistance = -Infinity; // Always looking for the largest positive distance
+        let bestDistance = -Infinity;
 
         const finishedRacers = gameState.players.filter(p => p.hasFinished);
 
@@ -1177,17 +1171,17 @@
                 const p = finishedRacers[i];
                 if (p.distancePastFinishLine > bestDistance) {
                     bestDistance = p.distancePastFinishLine;
-                    winningPlayerIndex = gameState.players.indexOf(p); // Get original index
+                    winningPlayerIndex = gameState.players.indexOf(p);
                 }
             }
         } else {
-            winningPlayerIndex = null; // No one finished
+            winningPlayerIndex = null;
         }
 
         gameState.gameStatus = 'finished';
         gameState.winnerIndex = winningPlayerIndex;
-        updateGameUI(); // Final UI update for winner
-        render(); // Final render
+        updateGameUI();
+        render();
 
         if (winningPlayerIndex !== null) {
             showMessageBox(`Game Over! The winner is Player ${winningPlayerIndex + 1}!`, "success", () => resetGame());
@@ -1196,11 +1190,6 @@
         }
     }
 
-    /**
-     * Animates a crash visual by flashing the crash location.
-     * @param {number} x - X-coordinate of the crash.
-     * @param {number} y - Y-coordinate of the crash.
-     */
     async function flashCrash(x, y) {
       flashing = true;
       let count = 0;
@@ -1213,125 +1202,125 @@
         if (count >= 6) {
           clearInterval(interval);
           flashing = false;
-          render(); // Re-render to clear any lingering flash artifacts
+          render();
         }
       }, 100);
-      return new Promise(resolve => setTimeout(() => resolve(), 600)); // Wait for flash to complete
+      return new Promise(resolve => setTimeout(() => resolve(), 600));
     }
 
-    /**
-     * Resets the entire game to its initial state (back to setup screen).
-     */
     function resetGame() {
-        // Clear game screen and show setup screen
-        document.getElementById('gameScreen').classList.add('hidden');
-        document.getElementById('gameScreen').classList.remove('flex'); // Remove flex when hidden
-        document.getElementById('setupScreen').classList.remove('hidden');
-
-        // Reset staged players and re-render setup UI
-        stagedPlayers = [];
-        selectedTrackId = trackDefinitions[0].id; // Reset to default track (Simple Sprint)
-        renderSetupScreen();
-
-        // Optional: Show a message that game was reset
-        showMessageBox("Game has been reset! Choose players and a track to start a new race.", "info");
-    }
-
-    // --- Game Initialization & Setup Screen Logic ---
-    /**
-     * Initializes the game with the selected players and track.
-     * This is called when 'Start Race' is clicked from the setup screen.
-     */
-    function initGame() {
-        // Cancel any ongoing animations before resetting
         if (animationFrameId) {
             cancelAnimationFrame(animationFrameId);
             animationFrameId = null;
         }
 
-        // Reset game state for a new game
+        document.getElementById('gameScreen').classList.add('hidden');
+        document.getElementById('gameScreen').classList.remove('flex');
+        document.getElementById('setupScreen').classList.remove('hidden');
+
+        stagedPlayers = [];
+        selectedTrackId = trackDefinitions[0].id;
+        renderSetupScreen();
+
+        const confirmMoveBtn = document.getElementById('confirmMoveButton');
+        if (confirmMoveBtn) confirmMoveBtn.disabled = true;
+        const clearSelectionBtn = document.getElementById('clearSelectionButton');
+        if (clearSelectionBtn) clearSelectionBtn.disabled = true;
+        const movementControlDiv = document.getElementById('movementControl');
+        if (movementControlDiv) {
+            movementControlDiv.classList.add('pointer-events-none', 'opacity-50');
+        }
+
+        gameState.players = [];
+        gameState.currentPlayerIndex = 0;
+        gameState.gameStatus = 'setup';
+        gameState.finishedPlayers = [];
+        gameState.winnerIndex = null;
+        gameState.turnCount = 0;
+        selectedVx = 0;
+        selectedVy = 0;
+
+        showMessageBox("Game has been reset! Choose players and a track to start a new race.", "info");
+    }
+
+    // --- Game Initialization & Setup Screen Logic ---
+    function initGame() {
+        if (animationFrameId) {
+            cancelAnimationFrame(animationFrameId);
+            animationFrameId = null;
+        }
+
         gameState.players = [];
         gameState.currentPlayerIndex = 0;
         gameState.gameStatus = 'playing';
         gameState.finishedPlayers = [];
-        // Removed maxTurnsInRound as it's no longer needed for immediate game over
         gameState.winnerIndex = null;
         gameState.turnCount = 0;
 
-        // Get track layout details (including start/finish lines)
+        selectedVx = 0;
+        selectedVy = 0;
+
         const selectedTrack = trackDefinitions.find(t => t.id === selectedTrackId);
-        let trackLines = { startLine: {}, finishLine: {} }; // Default empty
+        let trackLines = { startLine: {}, finishLine: {} };
         if (selectedTrack) {
-            trackLines = selectedTrack.drawLayout(); // This populates blockedCells AND returns line info
+            trackLines = selectedTrack.drawLayout();
         } else {
-            console.error("Selected track not found:", selectedTrackId);
-            trackDefinitions[0].drawLayout(); // Fallback to default
+            trackDefinitions[0].drawLayout();
         }
 
-        const startLine = trackLines.startLine; // Get startLine info
+        const startLine = trackLines.startLine;
 
-        // Populate players from staged players, aligning with the start line
         stagedPlayers.forEach((p, i) => {
             let playerStartX, playerStartY;
             const numPlayers = stagedPlayers.length;
-            const offsetIntoTrack = 1; // 1 grid unit inside the path for better visual placement
+            const offsetIntoTrack = 1;
 
-            // For vertical lines, distribute along Y. For horizontal, distribute along X.
             if (startLine.type === 'horizontal') {
-                playerStartY = startLine.y0 + offsetIntoTrack;
-                // Distribute players evenly along the X-segment of the start line
-                // Adjust for multiple players on a horizontal line to space them out
+                playerStartY = startLine.y0 + (startLine.y0 < rows/2 ? offsetIntoTrack : -offsetIntoTrack);
                 const segmentLength = startLine.x1 - startLine.x0;
                 playerStartX = startLine.x0 + ((i + 0.5) / numPlayers) * segmentLength;
-            } else { // 'vertical'
-                playerStartX = startLine.x0 + offsetIntoTrack;
-                // Distribute players evenly along the Y-segment of the start line
-                // Adjust for multiple players on a vertical line to space them out
+            } else {
+                playerStartX = startLine.x0 + (startLine.x0 < cols/2 ? offsetIntoTrack : -offsetIntoTrack);
                 const segmentLength = startLine.y1 - startLine.y0;
                 playerStartY = startLine.y0 + ((i + 0.5) / numPlayers) * segmentLength;
             }
 
             gameState.players.push({
                 id: p.id,
-                x: Math.round(playerStartX), // Round to nearest integer grid coordinate
-                y: Math.round(playerStartY), // Round to nearest integer grid coordinate
+                x: Math.round(playerStartX),
+                y: Math.round(playerStartY),
                 vx: 0,
                 vy: 0,
-                path: [[Math.round(playerStartX), Math.round(playerStartY)]], // Store path points as grid coords
+                previousVx: 0,
+                previousVy: 0,
+                path: [[Math.round(playerStartX), Math.round(playerStartY)]],
                 color: p.color,
                 hasFinished: false,
                 distancePastFinishLine: 0,
-                lastValidX: Math.round(playerStartX), // Last safe position before attempted move
+                lastValidX: Math.round(playerStartX),
                 lastValidY: Math.round(playerStartY),
-                // Animation properties
                 isAnimating: false,
                 animationStartTime: null,
-                animationDuration: 300, // Default duration for move animation
+                animationDuration: 300,
                 animationStartPos: [Math.round(playerStartX), Math.round(playerStartY)],
                 animationEndPos: [Math.round(playerStartX), Math.round(playerStartY)],
                 animationCompletionCallback: null,
-                isCrashAnimation: false, // New flag for crash animations
-                hasChangedVelocityThisTurn: false // Re-added flag for velocity change restriction
+                isCrashAnimation: false,
+                hasChangedVelocityThisTurn: false
             });
         });
 
-        updateGameUI(); // Update UI with new players and turn info
-        // Start the game loop for the initial render
+        updateGameUI();
         if (!animationFrameId) {
             animationFrameId = requestAnimationFrame(animateGameLoop);
         }
     }
 
-    /**
-     * Renders the setup screen with current players and track options.
-     */
     function renderSetupScreen() {
-        // Update Player Count
         document.getElementById('playerCount').innerText = stagedPlayers.length;
         document.getElementById('addPlayerButton').disabled = stagedPlayers.length >= 4;
         document.getElementById('removePlayerButton').disabled = stagedPlayers.length === 0;
 
-        // Update Staged Players List
         const stagedPlayersContainer = document.getElementById('stagedPlayersContainer');
         stagedPlayersContainer.innerHTML = '';
         if (stagedPlayers.length === 0) {
@@ -1349,9 +1338,8 @@
             });
         }
 
-        // Render Track Selection
         const trackSelectionContainer = document.getElementById('trackSelectionContainer');
-        trackSelectionContainer.innerHTML = ''; // Clear previous options
+        trackSelectionContainer.innerHTML = '';
         trackDefinitions.forEach(track => {
             const trackDiv = document.createElement('div');
             trackDiv.id = `track-${track.id}`;
@@ -1365,9 +1353,6 @@
         });
     }
 
-    /**
-     * Adds a player to the stagedPlayers array.
-     */
     function addPlayer() {
         if (stagedPlayers.length < 4) {
             const newPlayerId = `player${stagedPlayers.length + 1}`;
@@ -1382,9 +1367,6 @@
         }
     }
 
-    /**
-     * Removes the last player from the stagedPlayers array.
-     */
     function removePlayer() {
         if (stagedPlayers.length > 0) {
             stagedPlayers.pop();
@@ -1394,18 +1376,11 @@
         }
     }
 
-    /**
-     * Sets the selected track for the game.
-     * @param {string} trackId - The ID of the selected track.
-     */
     function selectTrack(trackId) {
         selectedTrackId = trackId;
-        renderSetupScreen(); // Re-render to update selection highlight
+        renderSetupScreen();
     }
 
-    /**
-     * Starts the race, transitioning from setup to game screen.
-     */
     function startGame() {
         if (stagedPlayers.length === 0) {
             showMessageBox("Please add at least one player to start the game.", "error");
@@ -1418,27 +1393,32 @@
 
         document.getElementById('setupScreen').classList.add('hidden');
         document.getElementById('gameScreen').classList.remove('hidden');
-        document.getElementById('gameScreen').classList.add('flex'); // Ensure it's flex for centering
+        document.getElementById('gameScreen').classList.add('flex');
 
-        initGame(); // Initialize the game with selected players and track
+        initGame();
     }
 
-    // --- Initial setup on window load ---
     window.onload = function() {
-        // Initialize staged players and render the setup screen
-        addPlayer(); // Add Player 1 by default
-        selectTrack(trackDefinitions[0].id); // Select first track by default (Simple Sprint)
+        addPlayer();
+        selectTrack(trackDefinitions[0].id);
         renderSetupScreen();
+
+        const confirmMoveBtn = document.getElementById('confirmMoveButton');
+        if (confirmMoveBtn) confirmMoveBtn.disabled = true;
+        const clearSelectionBtn = document.getElementById('clearSelectionButton');
+        if (clearSelectionBtn) clearSelectionBtn.disabled = true;
+        const movementControlDiv = document.getElementById('movementControl');
+        if (movementControlDiv) {
+            movementControlDiv.classList.add('pointer-events-none', 'opacity-50');
+        }
     };
 
-    // Expose functions to global scope for HTML onclick attributes to work
     window.addPlayer = addPlayer;
     window.removePlayer = removePlayer;
     window.selectTrack = selectTrack;
     window.startGame = startGame;
-    window.changeVX = changeVX;
-    window.changeVY = changeVY;
-    window.movePlayer = movePlayer;
+    window.confirmMove = confirmMove;
+    window.clearSelectedMove = clearSelectedMove;
     window.resetGame = resetGame;
     window.hideMessageBox = hideMessageBox;
     window.showMessageBox = showMessageBox;
