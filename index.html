@@ -13,12 +13,12 @@
       font-family: 'Inter', sans-serif;
     }
     canvas {
-      background-color: #f8f8f8; /* Light background for the track */
+      background-color: #f8f8f8;
       display: block;
-      margin: 20px auto;
-      border: 2px solid #333; /* Stronger border for the canvas */
-      border-radius: 8px; /* Rounded corners for the canvas */
-      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1); /* Subtle shadow */
+      margin: 20px 0;
+      border: 2px solid #333;
+      border-radius: 8px;
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
     }
     /* Styles for the custom message box */
     .message-box-overlay {
@@ -55,10 +55,10 @@
     button:disabled {
         opacity: 0.5;
         cursor: not-allowed;
-        transform: none; /* Remove hover transform for disabled */
+        transform: none;
     }
     button:disabled:hover {
-        background-color: #4F46E5; /* Keep original background for disabled hover */
+        background-color: #4F46E5;
     }
     .player-indicator {
       display: inline-block;
@@ -73,48 +73,83 @@
         transition: all 0.2s ease-in-out;
     }
     .track-selection-item.selected {
-        border-color: #4F46E5; /* Indigo-600 for selected track */
-        box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.5); /* Ring effect */
+        border-color: #4F46E5;
+        box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.5);
         transform: scale(1.02);
     }
-
-    /* New CSS for movement controls */
+    /* Movement controls styling */
     .movement-grid-button {
         border: 1px solid #ccc;
-        background-color: #e2e8f0; /* Tailwind gray-200 */
-        color: #4a5568; /* Tailwind gray-700 */
+        background-color: #e2e8f0;
+        color: #4a5568;
         cursor: pointer;
     }
-
     .movement-grid-button:hover:enabled {
-        background-color: #93c5fd; /* Tailwind blue-300 */
+        background-color: #93c5fd;
     }
-
     .movement-grid-button.selected-move {
-        background-color: #3b82f6; /* Tailwind blue-500 */
+        background-color: #3b82f6;
         color: white;
-        border-color: #1d4ed8; /* Tailwind blue-700 */
+        border-color: #1d4ed8;
     }
-
     .movement-grid-button:disabled {
-        background-color: #cbd5e0; /* Tailwind gray-300 */
-        color: #a0aec0; /* Tailwind gray-400 */
+        background-color: #cbd5e0;
+        color: #a0aec0;
         cursor: not-allowed;
     }
-
     #movementControl.pointer-events-none {
         pointer-events: none;
     }
     #movementControl.opacity-50 {
         opacity: 0.5;
     }
+    /* Game container layout */
+    .game-container {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 20px;
+      align-items: flex-start;
+    }
+    .track-container {
+      flex: 0 0 auto;
+    }
+    .controls-container {
+      flex: 0 0 300px;
+      background: white;
+       margin-top: 20px;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    }
+    .player-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 10px;
+      margin-bottom: 20px;
+    }
+    .player-item {
+      display: flex;
+      align-items: center;
+      padding: 5px 10px;
+      border-radius: 4px;
+      background: #f3f4f6;
+    }
+    .player-item.current {
+      font-weight: bold;
+      background: #e0e7ff;
+    }
+    .player-item.finished {
+      text-decoration: line-through;
+      opacity: 0.7;
+    }
   </style>
 </head>
-<body class="bg-gradient-to-br from-blue-100 to-purple-100 min-h-screen flex flex-col items-center py-8">
+<body class="bg-gradient-to-br from-blue-100 to-purple-100 min-h-screen py-8">
 
   <!-- Setup Screen -->
-  <div id="setupScreen" class="bg-white p-8 rounded-lg shadow-xl w-11/12 max-w-2xl flex flex-col items-center">
-    <h2 class="text-3xl font-bold text-gray-800 mb-6">Game Setup</h2>
+  <div id="setupScreen" class="bg-white p-8 rounded-lg shadow-xl w-11/12 max-w-2xl mx-auto flex flex-col items-center">
+    <h2 class="text-3xl font-bold text-gray-800 mb-6">Race Track</h2>
 
     <!-- Player Management -->
     <div class="mb-8 w-full">
@@ -138,37 +173,42 @@
   </div>
 
   <!-- Game Screen (initially hidden) -->
-  <div id="gameScreen" class="hidden flex flex-col items-center w-full">
-    <div class="bg-white p-6 rounded-lg shadow-lg mb-6 w-11/12 max-w-lg">
-      <div id="gameInfo" class="text-center mb-4">
-        <div id="playerList" class="mt-4">
-          <h3 class="font-bold text-gray-800 mb-2">Players:</h3>
-          <ul id="playersContainer" class="list-none p-0 flex flex-wrap justify-center gap-x-4 gap-y-2">
-            </ul>
+  <div id="gameScreen" class="hidden w-11/12 mx-auto">
+    <div class="game-container">
+      <div class="track-container">
+        <canvas id="track" width="900" height="600" class="max-w-full h-auto"></canvas>
+        <div class="flex justify-center mt-4">
+          <button id="resetButton" onclick="resetGame()" class="px-8 py-3 bg-red-500 text-white font-bold rounded-lg shadow-lg hover:bg-red-600 transition duration-200 ease-in-out transform hover:scale-105">🔄 Reset Game</button>
         </div>
-        <p id="currentTurnInfo" class="text-xl font-bold mt-4">Player 1's Turn!</p>
-        <p id="gameStatusInfo" class="text-lg font-medium text-gray-700 mt-2">Status: Playing</p>
       </div>
-    </div>
 
-    <canvas id="track" width="900" height="600" class="max-w-full h-auto"></canvas>
-
-    <!-- New Movement Controls -->
-    <div class="mt-4">
-        <h4 class="text-lg font-semibold text-gray-700 mb-2">Current Player's Velocity: <span id="velocity">(0, 0)</span></h4>
-        <h4 class="text-lg font-semibold text-gray-700 mb-2">Choose Your Move:</h4>
-        <div id="movementControl" class="grid grid-cols-3 gap-1 w-48 h-48 bg-gray-200 p-2 rounded-lg mx-auto">
-            <!-- Directional buttons will be dynamically generated here -->
+      <div class="controls-container">
+        <div id="playerList" class="mb-6">
+          <h3 class="font-bold text-gray-800 mb-2">Players:</h3>
+          <div id="playersContainer" class="player-list">
+            </div>
         </div>
-        <div class="flex justify-center gap-4 mt-4">
+        
+        <div class="mb-4">
+          <h3 id="currentTurnInfo" class="text-xl font-bold text-gray-800 mb-2">Player 1's Turn</h3>
+          <p id="gameStatusInfo" class="text-lg font-medium text-gray-700 mb-4">Status: Playing</p>
+        </div>
+
+        <div class="mb-4">
+          <h4 class="text-lg font-semibold text-gray-700 mb-2">Current Velocity: <span id="velocity">(0, 0)</span></h4>
+        </div>
+
+        <!-- Movement Controls -->
+        <div class="mb-4">
+          <h4 class="text-lg font-semibold text-gray-700 mb-2">Choose Your Move:</h4>
+          <div id="movementControl" class="grid grid-cols-3 gap-1 w-48 h-48 bg-gray-200 p-2 rounded-lg mx-auto">
+            </div>
+          <div class="flex justify-center gap-4 mt-4">
             <button id="clearSelectionButton" class="bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded" onclick="clearSelectedMove()">Clear Selection</button>
             <button id="confirmMoveButton" class="bg-green-500 hover:bg-green-700 text-white font-bold py-2 px-4 rounded" onclick="confirmMove()">Confirm Move</button>
+          </div>
         </div>
-    </div>
-
-    <div id="controls" class="flex flex-wrap justify-center gap-3 mt-8">
-      <!-- Velocity buttons are removed here, replaced by movementControl -->
-      <button id="resetButton" onclick="resetGame()" class="px-8 py-3 bg-red-500 text-white font-bold rounded-lg shadow-lg hover:bg-red-600 transition duration-200 ease-in-out transform hover:scale-105">🔄 Reset Game</button>
+      </div>
     </div>
   </div>
 
@@ -516,8 +556,8 @@
                 unblockDiagonal(p4x, p4y, p5x, p5y, pathWidth);
 
                 // Define Start and Finish Line coordinates
-                const startLine = { x0: p1x, y0: p1y, x1: p1x + pathWidth -1, y1: p1y, type: 'horizontal' };
-                const finishLine = { x0: p5x - pathWidth + 1, y0: p5y, x1: p5x, y1: p5y, type: 'horizontal' };
+                const startLine = { x0: p1x, y0: p1y, x1: p1x + pathWidth , y1: p1y, type: 'horizontal' };
+                const finishLine = { x0: p5x - pathWidth +1, y0: p5y, x1: p5x, y1: p5y, type: 'horizontal' };
                 drawTrackLinesAndTexts(startLine, finishLine);
                 return { startLine, finishLine };
             }
@@ -836,24 +876,20 @@
         const playersContainer = document.getElementById('playersContainer');
         playersContainer.innerHTML = '';
         gameState.players.forEach((p, index) => {
-            const li = document.createElement('li');
-            li.className = 'flex items-center';
+            const playerDiv = document.createElement('div');
+            playerDiv.className = `player-item ${index === gameState.currentPlayerIndex ? 'current' : ''} ${p.hasFinished ? 'finished' : ''}`;
+            
             const colorBox = document.createElement('span');
             colorBox.className = 'player-indicator';
             colorBox.style.backgroundColor = p.color;
-            li.appendChild(colorBox);
-            li.appendChild(document.createTextNode(`Player ${index + 1}`));
-            if (index === gameState.currentPlayerIndex) {
-                li.classList.add('font-bold', 'text-purple-700');
-            }
-            if (p.hasFinished) {
-                li.classList.add('line-through', 'opacity-70');
-            }
-            playersContainer.appendChild(li);
+            playerDiv.appendChild(colorBox);
+            playerDiv.appendChild(document.createTextNode(`Player ${index + 1}`));
+            
+            playersContainer.appendChild(playerDiv);
         });
 
         if (gameState.players.length > 0) {
-            document.getElementById('currentTurnInfo').innerText = `Player ${gameState.currentPlayerIndex + 1}'s Turn!`;
+            document.getElementById('currentTurnInfo').innerText = `Player ${gameState.currentPlayerIndex + 1}'s Turn`;
             const currentPlayer = gameState.players[gameState.currentPlayerIndex];
             document.getElementById("velocity").innerText = `(${currentPlayer.vx}, ${currentPlayer.vy})`;
         } else {
@@ -1215,7 +1251,6 @@
         }
 
         document.getElementById('gameScreen').classList.add('hidden');
-        document.getElementById('gameScreen').classList.remove('flex');
         document.getElementById('setupScreen').classList.remove('hidden');
 
         stagedPlayers = [];
@@ -1393,7 +1428,6 @@
 
         document.getElementById('setupScreen').classList.add('hidden');
         document.getElementById('gameScreen').classList.remove('hidden');
-        document.getElementById('gameScreen').classList.add('flex');
 
         initGame();
     }
