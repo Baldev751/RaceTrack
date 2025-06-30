@@ -13,7 +13,7 @@
       font-family: 'Inter', sans-serif;
     }
     canvas {
-      background-color: #f8f8f8;
+      background-color: #49cf8c;
       display: block;
       margin: 20px 0;
       border: 2px solid #333;
@@ -145,11 +145,16 @@
     }
   </style>
 </head>
-<body class="bg-gradient-to-br from-blue-100 to-purple-100 min-h-screen py-8">
+<body class="bg-gradient-to-br from-green-400 to-green-200 min-h-screen py-8">
 
   <!-- Setup Screen -->
-  <div id="setupScreen" class="bg-white p-8 rounded-lg shadow-xl w-11/12 max-w-2xl mx-auto flex flex-col items-center">
-    <h2 class="text-3xl font-bold text-gray-800 mb-6">Race Track</h2>
+  <div id="setupScreen" class="bg-white p-8 rounded-lg shadow-xl w-11/12 max-w-2xl mx-auto flex flex-col items-center relative">
+    <!-- Show Rules Button (top right) -->
+    <button onclick="showRules()" class="absolute top-4 right-4 px-6 py-2 bg-blue-400 text-white font-bold rounded-lg shadow hover:bg-green-400 transition duration-200">
+      Show Rules 📜
+    </button>
+
+    <h2 class="text-3xl font-bold text-gray-800 mb-6">Race Track🏁</h2>
 
     <!-- Player Management -->
     <div class="mb-8 w-full">
@@ -219,6 +224,7 @@
       <button onclick="hideMessageBox()" class="px-6 py-3 bg-blue-600 text-white font-bold rounded-lg shadow-md hover:bg-blue-700 transition duration-200 ease-in-out transform hover:scale-105">OK</button>
     </div>
   </div>
+
 
   <script>
     const canvas = document.getElementById("track");
@@ -514,57 +520,84 @@
                 return { startLine, finishLine };
             }
         },
-        {
-            id: 'm-track',
-            name: 'M-Track',
-            description: 'Conquer the peaks and valleys of this M-shaped course (white area).',
-            drawLayout: () => {
-                blockedCells.clear();
-                const { playableMinX, playableMaxX, playableMinY, playableMaxY } = getPlayableAreaBounds();
+      {
+    id: 'sigma-track',
+    name: 'M shaped Track',
+    description: 'M-shape with smooth curves',
+    drawLayout: () => {
+        blockedCells.clear();
+        const { playableMinX, playableMaxX, playableMinY, playableMaxY } = getPlayableAreaBounds();
 
-                // Outer boundaries
-                addBlock(0, 0, cols, 2); addBlock(0, rows - 2, cols, 2);
-                addBlock(0, 0, 2, rows); addBlock(cols - 2, 0, 2, rows);
+        // 1. Create outer walls
+        addBlock(0, 0, cols, 2); addBlock(0, rows - 2, cols, 2);
+        addBlock(0, 0, 2, rows); addBlock(cols - 2, 0, 2, rows);
 
-                // Fill inner area with walls
-                for (let x = playableMinX; x <= playableMaxX; x++) {
-                    for (let y = playableMinY; y <= playableMaxY; y++) {
-                        blockedCells.add(cellKey(x, y));
-                    }
-                }
-
-                const pathWidth = 4;
-                const letterWidth = playableMaxX - playableMinX + 1;
-                const letterHeight = playableMaxY - playableMinY + 1;
-
-                // Relative coordinates for M points
-                const p1x = playableMinX;
-                const p1y = playableMaxY;
-                const p2x = Math.floor(playableMinX + letterWidth * 0.25);
-                const p2y = playableMinY;
-                const p3x = Math.floor(playableMinX + letterWidth * 0.5);
-                const p3y = Math.floor(playableMinY + letterHeight * 0.5) + Math.floor(pathWidth / 2);
-                const p4x = Math.floor(playableMinX + letterWidth * 0.75);
-                const p4y = playableMinY;
-                const p5x = playableMaxX;
-                const p5y = playableMaxY;
-
-                // Unblock segments of the 'M'
-                unblockDiagonal(p1x, p1y, p2x, p2y, pathWidth);
-                unblockDiagonal(p2x, p2y, p3x, p3y, pathWidth);
-                unblockDiagonal(p3x, p3y, p4x, p4y, pathWidth);
-                unblockDiagonal(p4x, p4y, p5x, p5y, pathWidth);
-
-                // Define Start and Finish Line coordinates
-                const startLine = { x0: p1x, y0: p1y, x1: p1x + pathWidth , y1: p1y, type: 'horizontal' };
-                const finishLine = { x0: p5x - pathWidth +1, y0: p5y, x1: p5x, y1: p5y, type: 'horizontal' };
-                drawTrackLinesAndTexts(startLine, finishLine);
-                return { startLine, finishLine };
+        // 2. Fill play area with walls
+        for (let x = playableMinX; x <= playableMaxX; x++) {
+            for (let y = playableMinY; y <= playableMaxY; y++) {
+                blockedCells.add(cellKey(x, y));
             }
-        },
+        }
+
+        const pathWidth = 5;
+        const letterHeight = playableMaxY - playableMinY + 1;
+        const letterWidth = playableMaxX - playableMinX + 1;
+
+        // 3. Sigma shape points (rotated M)
+        const points = [
+            // Start at bottom-left
+            { x: playableMinX, y: playableMaxY },
+            // First peak (left)
+            { x: Math.floor(playableMinX + letterWidth * 0.25), y: playableMinY },
+            // Valley (center)
+            { x: Math.floor(playableMinX + letterWidth * 0.5), y: Math.floor(playableMinY + letterHeight * 0.5) },
+            // Second peak (right)
+            { x: Math.floor(playableMinX + letterWidth * 0.75), y: playableMinY },
+            // Finish at bottom-right (original position)
+            { x: playableMaxX, y: playableMaxY }
+        ];
+
+        // 4. Create 5-cell wide diagonal paths
+        for (let i = 0; i < points.length - 1; i++) {
+            unblockDiagonal(
+                points[i].x, points[i].y,
+                points[i+1].x, points[i+1].y,
+                pathWidth
+            );
+        }
+
+        // 5. Define start/finish lines (vertical)
+        const startLine = {
+            x0: points[0].x,
+            y0: points[0].y - Math.floor(pathWidth/2),
+            x1: points[0].x,
+            y1: points[0].y + Math.floor(pathWidth/2),
+            type: 'vertical'
+        };
+
+        // Modified finish line - moved 2 grids right from original edge
+        const finishLine = {
+            x0: points[4].x + 2,  // Key change: +2 to x-position
+            y0: points[4].y - Math.floor(pathWidth/2),
+            x1: points[4].x + 2,  // Consistent x-position
+            y1: points[4].y + Math.floor(pathWidth/2),
+            type: 'vertical'
+        };
+
+        // 6. Ensure finish area is clear
+        for (let y = finishLine.y0; y <= finishLine.y1; y++) {
+            blockedCells.delete(cellKey(finishLine.x0, y));
+            blockedCells.delete(cellKey(finishLine.x0 + 1, y)); // Clear adjacent cells
+        }
+
+        // 7. Draw track markers
+        drawTrackLinesAndTexts(startLine, finishLine);
+        return { startLine, finishLine };
+    }
+},
         {
             id: 's-track',
-            name: 'S-Track',
+            name: 'Stairs Track',
             description: 'Test your turning skills on the classic S-bend track (white area).',
             drawLayout: () => {
                 blockedCells.clear();
@@ -814,62 +847,89 @@
         }
     }
 
-    // --- UI Update Functions ---
-    function drawMovementSelectionGrid() {
-        const movementControl = document.getElementById('movementControl');
-        if (!movementControl) return;
+function drawMovementSelectionGrid() {
+    const movementControl = document.getElementById('movementControl');
+    if (!movementControl) return;
 
-        movementControl.innerHTML = '';
+    movementControl.innerHTML = '';
 
-        const currentPlayer = gameState.players[gameState.currentPlayerIndex];
-        const areControlsActive = (currentPlayer && !currentPlayer.hasFinished && gameState.gameStatus === 'playing' && !currentPlayer.isAnimating);
+    const currentPlayer = gameState.players[gameState.currentPlayerIndex];
+    const areControlsActive = (currentPlayer && !currentPlayer.hasFinished && 
+                             gameState.gameStatus === 'playing' && !currentPlayer.isAnimating);
 
-        setControlButtonsState(
-            areControlsActive && !currentPlayer.hasChangedVelocityThisTurn,
-            areControlsActive && currentPlayer.hasChangedVelocityThisTurn,
-            areControlsActive && currentPlayer.hasChangedVelocityThisTurn
-        );
+    setControlButtonsState(
+        areControlsActive && !currentPlayer.hasChangedVelocityThisTurn,
+        areControlsActive && currentPlayer.hasChangedVelocityThisTurn,
+        areControlsActive && currentPlayer.hasChangedVelocityThisTurn
+    );
 
-        const currentVx = currentPlayer ? currentPlayer.vx : 0;
-        const currentVy = currentPlayer ? currentPlayer.vy : 0;
+    const currentVx = currentPlayer ? currentPlayer.vx : 0;
+    const currentVy = currentPlayer ? currentPlayer.vy : 0;
 
-        for (let dyGrid = -1; dyGrid <= 1; dyGrid++) {
-            for (let dxGrid = -1; dxGrid <= 1; dxGrid++) {
-                const targetVx = currentVx + dxGrid;
-                const targetVy = currentVy + dyGrid;
+    // Check if player is on start line
+    const selectedTrack = trackDefinitions.find(t => t.id === selectedTrackId);
+    const { startLine } = selectedTrack.drawLayout();
+    const isOnStartLine = isPlayerAtStartLine(currentPlayer, startLine);
 
-                const button = document.createElement('button');
-                button.className = 'w-full h-full flex items-center justify-center text-sm font-semibold rounded ' +
-                                   'transition-colors duration-150 ease-in-out ' +
-                                   'movement-grid-button';
+    // Generate all 9 movement buttons
+    for (let dyGrid = -1; dyGrid <= 1; dyGrid++) {
+        for (let dxGrid = -1; dxGrid <= 1; dxGrid++) {
+            const targetVx = currentVx + dxGrid;
+            const targetVy = currentVy + dyGrid;
 
-                const iconSVG = `
-                    <svg class="w-8 h-8" fill="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
-                        ${getDirectionIcon(dxGrid, dyGrid)}
-                    </svg>
-                `;
+            const button = document.createElement('button');
+            button.className = 'w-full h-full flex items-center justify-center text-sm font-semibold rounded ' +
+                               'transition-colors duration-150 ease-in-out ' +
+                               'movement-grid-button';
 
-                button.setAttribute('title', `Change velocity to (${targetVx}, ${targetVy})`);
-                button.innerHTML = iconSVG;
+            button.innerHTML = `
+                <svg class="w-8 h-8" fill="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    ${getDirectionIcon(dxGrid, dyGrid)}
+                </svg>
+            `;
 
-                if (selectedVx === targetVx && selectedVy === targetVy && currentPlayer.hasChangedVelocityThisTurn) {
-                    button.classList.add('selected-move');
-                }
+            button.setAttribute('title', `Change velocity to (${targetVx}, ${targetVy})`);
 
-                if (!areControlsActive || currentPlayer.hasChangedVelocityThisTurn) {
-                    button.disabled = true;
-                    button.classList.add('opacity-50', 'cursor-not-allowed');
-                } else {
-                    button.disabled = false;
-                    button.classList.remove('opacity-50', 'cursor-not-allowed');
-                    button.onclick = () => selectNextMove(targetVx, targetVy);
-                }
-
-                movementControl.appendChild(button);
+            // Highlight selected move
+            if (selectedVx === targetVx && selectedVy === targetVy && currentPlayer.hasChangedVelocityThisTurn) {
+                button.classList.add('selected-move');
             }
+
+            // Disable conditions:
+            const isRestrictedOnStartLine = isOnStartLine && (
+                (startLine.type === 'vertical' && !(dxGrid === 1 && (dyGrid === -1 || dyGrid === 0 || dyGrid === 1))) ||
+                (startLine.type === 'horizontal' && !(dyGrid === 1 && (dxGrid === -1 || dxGrid === 0 || dxGrid === 1)))
+            );
+
+            if (!areControlsActive || currentPlayer.hasChangedVelocityThisTurn || isRestrictedOnStartLine) {
+                button.disabled = true;
+                button.classList.add('opacity-50', 'cursor-not-allowed');
+            } else {
+                button.onclick = () => selectNextMove(targetVx, targetVy);
+            }
+
+            movementControl.appendChild(button);
         }
     }
-
+}
+// Helper function to check if player is at start line
+function isPlayerAtStartLine(player, startLine) {
+    if (startLine.type === 'horizontal') {
+        // Check if player is on the horizontal start line (green line)
+        const minX = Math.min(startLine.x0, startLine.x1);
+        const maxX = Math.max(startLine.x0, startLine.x1);
+        return Math.round(player.y) === startLine.y0 && 
+               Math.round(player.x) >= minX && 
+               Math.round(player.x) <= maxX;
+    } else {
+        // Check if player is on the vertical start line (green line)
+        const minY = Math.min(startLine.y0, startLine.y1);
+        const maxY = Math.max(startLine.y0, startLine.y1);
+        return Math.round(player.x) === startLine.x0 && 
+               Math.round(player.y) >= minY && 
+               Math.round(player.y) <= maxY;
+    }
+}
     function updateGameUI() {
         document.getElementById('gameStatusInfo').innerText = `Status: ${gameState.gameStatus.replace(/_/g, ' ')}`;
 
@@ -1059,7 +1119,7 @@
         }
 
         if (gameState.turnCount >= gameState.players.length && currentPlayer.vx === 0 && currentPlayer.vy === 0) {
-            showMessageBox("Velocity (0,0) is not allowed after initial setup. Please select a non-zero velocity.", "error", () => {
+            showMessageBox("Velocity (0,0).Please select a non-zero velocity.", "error", () => {
                 currentPlayer.hasChangedVelocityThisTurn = false;
                 currentPlayer.vx = currentPlayer.previousVx;
                 currentPlayer.vy = currentPlayer.previousVy;
@@ -1254,6 +1314,7 @@
         document.getElementById('setupScreen').classList.remove('hidden');
 
         stagedPlayers = [];
+        addPlayer();
         selectedTrackId = trackDefinitions[0].id;
         renderSetupScreen();
 
@@ -1275,7 +1336,7 @@
         selectedVx = 0;
         selectedVy = 0;
 
-        showMessageBox("Game has been reset! Choose players and a track to start a new race.", "info");
+        showMessageBox("Game has been reset! Choose track to start a new race.", "info");
     }
 
     // --- Game Initialization & Setup Screen Logic ---
@@ -1303,22 +1364,24 @@
             trackDefinitions[0].drawLayout();
         }
 
-        const startLine = trackLines.startLine;
+         const startLine = trackLines.startLine;
 
-        stagedPlayers.forEach((p, i) => {
-            let playerStartX, playerStartY;
-            const numPlayers = stagedPlayers.length;
-            const offsetIntoTrack = 1;
+    stagedPlayers.forEach((p, i) => {
+        let playerStartX, playerStartY;
+        const numPlayers = stagedPlayers.length;
 
-            if (startLine.type === 'horizontal') {
-                playerStartY = startLine.y0 + (startLine.y0 < rows/2 ? offsetIntoTrack : -offsetIntoTrack);
-                const segmentLength = startLine.x1 - startLine.x0;
-                playerStartX = startLine.x0 + ((i + 0.5) / numPlayers) * segmentLength;
-            } else {
-                playerStartX = startLine.x0 + (startLine.x0 < cols/2 ? offsetIntoTrack : -offsetIntoTrack);
-                const segmentLength = startLine.y1 - startLine.y0;
-                playerStartY = startLine.y0 + ((i + 0.5) / numPlayers) * segmentLength;
-            }
+        if (startLine.type === 'horizontal') {
+            // Horizontal start line: Place players ON the line (y = startLine.y0)
+            playerStartY = startLine.y0;
+            const segmentLength = startLine.x1 - startLine.x0;
+            playerStartX = startLine.x0 + ((i + 0.5) / numPlayers) * segmentLength;
+        } else {
+            // Vertical start line: Place players ON the line (x = startLine.x0)
+            playerStartX = startLine.x0;
+            const segmentLength = startLine.y1 - startLine.y0;
+            playerStartY = startLine.y0 + ((i + 0.5) / numPlayers) * segmentLength;
+        }
+
 
             gameState.players.push({
                 id: p.id,
@@ -1354,7 +1417,7 @@
     function renderSetupScreen() {
         document.getElementById('playerCount').innerText = stagedPlayers.length;
         document.getElementById('addPlayerButton').disabled = stagedPlayers.length >= 4;
-        document.getElementById('removePlayerButton').disabled = stagedPlayers.length === 0;
+        document.getElementById('removePlayerButton').disabled = stagedPlayers.length === 1;
 
         const stagedPlayersContainer = document.getElementById('stagedPlayersContainer');
         stagedPlayersContainer.innerHTML = '';
@@ -1403,7 +1466,7 @@
     }
 
     function removePlayer() {
-        if (stagedPlayers.length > 0) {
+        if (stagedPlayers.length > 1) {
             stagedPlayers.pop();
             renderSetupScreen();
         } else {
@@ -1415,6 +1478,18 @@
         selectedTrackId = trackId;
         renderSetupScreen();
     }
+    function showRules() {
+    const rules = `
+                RULES
+                1.Cross the finish line first
+                2.Adjust velocity by ±1 in x/y each turn
+                3.Start by moving away from the green line
+                4.Crash into walls resets your speed to (0,0)
+                5.Farthest past finish line wins
+          
+    `;
+    showMessageBox(rules, "info");
+}
 
     function startGame() {
         if (stagedPlayers.length === 0) {
@@ -1456,6 +1531,7 @@
     window.resetGame = resetGame;
     window.hideMessageBox = hideMessageBox;
     window.showMessageBox = showMessageBox;
+    window.showRules = showRules;
   </script>
 </body>
 </html>
